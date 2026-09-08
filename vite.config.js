@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -8,4 +9,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    fs: {
+      allow: ['..'],
+    },
+  },
+  resolve: {
+    alias: {
+      '@frontend': path.resolve(__dirname, '../Energy-Autonomy/src'),
+    },
+  },
 })
