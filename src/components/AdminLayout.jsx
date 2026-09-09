@@ -15,13 +15,22 @@ const navItems = [
     ),
   },
   {
-    label: 'Blog Posts',
+    label: 'All Blogs',
     path: '/blog',
     hasBadge: true,
     icon: (
       <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
           d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+      </svg>
+    ),
+  },
+  {
+    label: 'New Blog',
+    path: '/blog/create',
+    icon: (
+      <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 4v16m8-8H4" />
       </svg>
     ),
   },
@@ -69,15 +78,20 @@ const Sidebar = () => {
           </p>
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = location.pathname.startsWith(item.path);
+              const isActive =
+                item.path === '/dashboard'
+                  ? location.pathname === '/dashboard'
+                  : item.path === '/blog'
+                  ? location.pathname === '/blog' || location.pathname.startsWith('/blog/view')
+                  : location.pathname === '/blog/create' || location.pathname === '/write-blog' || location.pathname === '/create-blog';
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-150 relative group ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all duration-150 relative group ${
                     isActive
-                      ? 'bg-purple-50 text-[#8F3EC9]'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'bg-[#8F3EC9]/12 text-[#8F3EC9]'
+                      : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
                   }`}
                 >
                   <span
@@ -90,17 +104,14 @@ const Sidebar = () => {
                   <span className="truncate flex-1">{item.label}</span>
                   {item.hasBadge && (
                     <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-md transition-colors ${
                         isActive
-                          ? 'bg-[#8F3EC9] text-white'
+                          ? 'bg-[#8F3EC9]/15 text-[#8F3EC9]'
                           : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                       }`}
                     >
                       {posts.length}
                     </span>
-                  )}
-                  {isActive && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#8F3EC9]" />
                   )}
                 </NavLink>
               );
@@ -109,11 +120,11 @@ const Sidebar = () => {
         </div>
       </div>
 
-      {/* User Card & Logout */}
-      <div className="p-3 border-t border-slate-100 bg-white">
-        <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200/60 mb-2">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#8F3EC9] to-[#FE9B40] text-white text-xs font-black flex items-center justify-center shrink-0">
+      {/* User Card & Smooth Hover Account Details */}
+      <div className="p-3 border-t border-slate-100 bg-white relative group">
+        <div className="p-2.5 rounded-xl bg-slate-50/80 group-hover:bg-slate-100/80 border border-slate-200/60 transition-all text-left flex items-center justify-between cursor-pointer">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#8F3EC9] to-[#FE9B40] text-white text-xs font-black flex items-center justify-center shrink-0 shadow-xs">
               A
             </div>
             <div className="min-w-0 flex-1">
@@ -121,18 +132,48 @@ const Sidebar = () => {
               <p className="text-[11px] text-slate-400 truncate">admin@gmail.com</p>
             </div>
           </div>
+          <svg
+            className="w-4 h-4 text-slate-400 transition-transform duration-300 group-hover:rotate-180 group-hover:text-[#8F3EC9]"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          <span>Sign Out</span>
-        </button>
+        {/* Smooth Accordion Grid Transition on Hover */}
+        <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-all duration-300 ease-in-out">
+          <div className="overflow-hidden min-h-0">
+            <div className="pt-2">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60 space-y-2.5">
+                <div className="space-y-1.5 text-[11px] text-slate-600">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-400">Role:</span>
+                    <span className="font-bold text-[#8F3EC9]">Administrator</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-slate-400">Email:</span>
+                    <span className="font-bold text-slate-700 truncate max-w-[120px]" title="admin@gmail.com">
+                      admin@gmail.com
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors border border-rose-100 cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
   );
@@ -157,26 +198,6 @@ const Topbar = () => {
         <span className="text-slate-400 font-semibold">Admin</span>
         <span className="text-slate-300">/</span>
         <span className="text-slate-800 font-bold">{getPageTitle()}</span>
-      </div>
-
-      {/* Right Actions */}
-      <div className="flex items-center gap-3">
-        <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Live Website Synced
-        </span>
-
-        {location.pathname !== '/blog/create' && (
-          <Link
-            to="/blog/create"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#8F3EC9] text-white text-xs font-bold rounded-lg hover:bg-[#7B2EB3] transition-colors shadow-xs"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            New Post
-          </Link>
-        )}
       </div>
     </header>
   );

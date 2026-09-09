@@ -148,6 +148,44 @@ const BlogFormPage = ({ mode = 'create' }) => {
         </div>
       )}
 
+      {/* ── Medium Editor Banner Box ── */}
+      <Link
+        to="/write-blog"
+        className="block p-5 bg-gradient-to-r from-purple-900 via-slate-900 to-purple-950 border border-purple-500/30 rounded-2xl text-white shadow-lg hover:border-purple-400 hover:shadow-purple-900/20 transition-all duration-300 group cursor-pointer"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-purple-600/30 border border-purple-400/40 flex items-center justify-center text-purple-300 shrink-0 group-hover:scale-105 transition-transform">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-md border border-purple-500/30">
+                  Rich Story Editor
+                </span>
+                <span className="text-xs text-purple-200/80 font-medium">Rich Story Format</span>
+              </div>
+              <h3 className="text-base font-bold text-white mt-1 group-hover:text-purple-200 transition-colors">
+                Open Rich Story Editor →
+              </h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Write formatted posts with inline word styling, floating media tools, and JSON export.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 hidden sm:block">
+            <span className="px-4 py-2 bg-[#8F3EC9] group-hover:bg-[#7B2EB3] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-colors">
+              Open Editor
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </Link>
+
       {/* ── Main Form Layout ── */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left 8 cols: Editor */}

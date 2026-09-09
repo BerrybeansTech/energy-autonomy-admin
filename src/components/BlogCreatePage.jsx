@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import MediumEditor from './MediumEditor'
 import JsonExportModal from './JsonExportModal'
+import { useBlog } from '../context/BlogContext'
 import {
   ArrowLeft,
   Eye,
@@ -20,49 +21,29 @@ import {
 } from 'lucide-react'
 
 const BlogCreatePage = ({ onBackToDashboard }) => {
+  const blogContext = useBlog()
+  const addPost = blogContext?.addPost
+
   const [title, setTitle] = useState('')
   const [subtitle, setSubtitle] = useState('')
   const [coverImage, setCoverImage] = useState('')
   const [showCoverInput, setShowCoverInput] = useState(false)
   const [tags, setTags] = useState(['Energy Autonomy', 'Sustainability', 'Green Tech'])
   const [newTagInput, setNewTagInput] = useState('')
+  const [isPublishSuccess, setIsPublishSuccess] = useState(false)
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('write')
   
   const [editorJson, setEditorJson] = useState({
     type: 'doc',
     content: [
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'Welcome to your Medium-style story editor. Highlight any ',
-          },
-          {
-            type: 'text',
-            marks: [{ type: 'textStyle', attrs: { color: '#1a8917' } }, { type: 'bold' }],
-            text: 'specific word or phrase',
-          },
-          {
-            type: 'text',
-            text: ' to change its custom text color! Click the ',
-          },
-          {
-            type: 'text',
-            marks: [{ type: 'bold' }],
-            text: '+ button',
-          },
-          {
-            type: 'text',
-            text: ' on the left of any empty line to insert images, video embeds, or horizontal dividers.',
-          },
-        ],
       },
     ],
   })
 
-  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false)
   const [isPreviewMode, setIsPreviewMode] = useState(false)
-  const [isPublishSuccess, setIsPublishSuccess] = useState(false)
 
   // Calculate word count & reading time
   const { wordCount, readingTime } = useMemo(() => {
@@ -110,8 +91,24 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
   // Publish Handler
   const handlePublish = () => {
+    if (addPost) {
+      addPost({
+        title: title || 'Untitled Story',
+        excerpt: subtitle || 'No excerpt provided.',
+        content: JSON.stringify(editorJson),
+        category: tags[0] || 'General',
+        status: 'published',
+        author: 'Admin',
+        readTime: `${readingTime} min read`,
+        tags: tags,
+        image: coverImage || 'blog1',
+      })
+    }
     setIsPublishSuccess(true)
-    setTimeout(() => setIsPublishSuccess(false), 4000)
+    setTimeout(() => {
+      setIsPublishSuccess(false)
+      if (onBackToDashboard) onBackToDashboard()
+    }, 1500)
   }
 
   const handleImportJson = (newJson) => {
@@ -140,9 +137,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs text-zinc-500 font-medium">Draft Saved</span>
-            <span className="text-xs text-zinc-400 font-normal">
-              • {wordCount} words • {readingTime} min read
-            </span>
           </div>
         </div>
 
