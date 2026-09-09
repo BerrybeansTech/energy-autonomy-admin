@@ -13,7 +13,6 @@ const statCardsConfig = (posts) => {
       value: posts.length,
       sub: 'All articles in system',
       iconBg: 'bg-purple-50 text-[#8F3EC9]',
-      badge: 'Live',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -26,7 +25,6 @@ const statCardsConfig = (posts) => {
       value: published,
       sub: 'Live on website',
       iconBg: 'bg-emerald-50 text-emerald-600',
-      badge: `${Math.round((published / (posts.length || 1)) * 100)}% active`,
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -39,7 +37,6 @@ const statCardsConfig = (posts) => {
       value: drafts,
       sub: 'In preparation',
       iconBg: 'bg-amber-50 text-amber-600',
-      badge: 'Unpublished',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -104,9 +101,6 @@ const DashboardPage = () => {
 
             <div className="flex items-baseline justify-between mt-1">
               <p className="text-3xl font-black text-slate-900 tracking-tight">{card.value}</p>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200/60 shadow-xs">
-                {card.badge}
-              </span>
             </div>
 
             <p className="text-[11px] text-slate-400 mt-3 font-medium">{card.sub}</p>
