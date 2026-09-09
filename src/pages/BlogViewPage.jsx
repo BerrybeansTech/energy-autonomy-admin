@@ -1,29 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useBlog } from '../context/BlogContext';
 import { getBlogImage } from '../data/imageAssets';
+import { ConfirmationModal } from '../components/common';
 
 const BlogViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getPost, deletePost, updatePost } = useBlog();
   const post = getPost(id);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   if (!post) {
     return (
-      <div className="p-12 max-w-xl mx-auto text-center space-y-4">
+      <div className="p-16 max-w-xl mx-auto text-center space-y-5 animate-fade-in-up">
         <div className="w-16 h-16 rounded-2xl bg-purple-50 text-[#8F3EC9] flex items-center justify-center mx-auto">
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Post Not Found</h2>
-        <p className="text-xs text-gray-500">The requested article could not be located in the library.</p>
+        <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Post Not Found</h2>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">The requested article could not be located in the library.</p>
         <Link
           to="/blog"
-          className="inline-block px-5 py-2.5 bg-[#8F3EC9] text-white rounded-xl text-xs font-bold hover:bg-[#7B2EB3] transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#8F3EC9] text-white rounded-lg text-xs font-bold hover:bg-[#7B2EB3] transition-colors shadow-sm"
         >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
           Return to Blog Posts
         </Link>
       </div>
@@ -40,20 +45,18 @@ const BlogViewPage = () => {
   };
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this blog post?')) {
-      deletePost(post.id);
-      navigate('/blog');
-    }
+    deletePost(post.id);
+    navigate('/blog');
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {/* ── Top Bar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             to="/blog"
-            className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors shrink-0 bg-white"
+            className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-[#8F3EC9] transition-all shrink-0 bg-white"
             title="Back to blog"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,12 +64,7 @@ const BlogViewPage = () => {
             </svg>
           </Link>
           <div>
-            <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold mb-0.5">
-              <Link to="/blog" className="hover:text-[#8F3EC9]">Blog</Link>
-              <span>/</span>
-              <span className="text-slate-600 truncate max-w-xs">{post.title}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
               Article Preview
             </h1>
           </div>
@@ -75,7 +73,7 @@ const BlogViewPage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleStatus}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors bg-white ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold border transition-all bg-white ${
               post.status === 'published'
                 ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
                 : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
@@ -85,13 +83,13 @@ const BlogViewPage = () => {
           </button>
           <Link
             to={`/blog/edit/${post.id}`}
-            className="px-4 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+            className="px-4 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-lg text-xs font-bold transition-all shadow-sm"
           >
             Edit Post
           </Link>
           <button
-            onClick={handleDelete}
-            className="p-2 border border-rose-200 text-rose-600 rounded-xl hover:bg-rose-50 transition-colors bg-white"
+            onClick={() => setDeleteConfirm(true)}
+            className="p-2 border border-rose-200 text-rose-600 rounded-lg hover:bg-rose-50 transition-all bg-white"
             title="Delete post"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,75 +101,111 @@ const BlogViewPage = () => {
       </div>
 
       {/* ── Article Layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left 8 cols: Full Article Reading Experience */}
-        <article className="lg:col-span-8 bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left: Full Article */}
+        <article className="lg:col-span-8 bg-white rounded-xl border border-slate-200/80 overflow-hidden animate-fade-in-up">
           {/* Featured Image */}
-          <div className="relative aspect-[16/9] bg-gray-100 overflow-hidden">
+          <div className="relative aspect-[16/9] bg-slate-100 overflow-hidden group">
             <img
               src={getBlogImage(post.image)}
               alt={post.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
             />
-            <div className="absolute top-4 left-4">
-              <span className="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-xs shadow-xs">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+            <div className="absolute top-3.5 left-3.5">
+              <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-sm">
                 {post.category}
               </span>
             </div>
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-3.5 right-3.5">
               <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-xs ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm ${
                   post.status === 'published'
                     ? 'bg-emerald-500 text-white'
                     : 'bg-amber-500 text-white'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 {post.status === 'published' ? 'Published' : 'Draft'}
               </span>
             </div>
           </div>
 
-          <div className="p-6 sm:p-10 space-y-6">
+          <div className="p-5 sm:p-8 space-y-5">
             {/* Meta Header */}
-            <div className="flex items-center gap-3 text-xs text-gray-500 pb-4 border-b border-gray-100">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#8F3EC9] to-[#FE9B40] text-white font-bold flex items-center justify-center text-xs">
+            <div className="flex items-center gap-3 text-xs text-slate-500 pb-4 border-b border-slate-100">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8F3EC9] to-[#FE9B40] text-white font-bold flex items-center justify-center text-xs shadow-sm">
                 {post.author.charAt(0)}
               </div>
-              <span className="font-bold text-gray-900">{post.author}</span>
-              <span>•</span>
-              <span>{post.publishedAt}</span>
-              <span>•</span>
-              <span>{post.readTime}</span>
+              <div>
+                <span className="font-bold text-slate-900 text-sm">{post.author}</span>
+                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                  <span>{post.publishedAt}</span>
+                  <span>•</span>
+                  <span>{post.readTime}</span>
+                  {post.views && (
+                    <>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        {(post.views || 0).toLocaleString()} views
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Title */}
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-gray-900 leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight tracking-tight">
               {post.title}
             </h1>
 
-            {/* Excerpt Lead */}
-            <p className="text-base sm:text-lg text-gray-600 italic leading-relaxed bg-purple-50/40 p-5 rounded-2xl border-l-4 border-[#8F3EC9]">
-              "{post.excerpt}"
-            </p>
+            {/* Excerpt */}
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#8F3EC9] to-[#FE9B40] rounded-full" />
+              <p className="text-sm sm:text-base text-slate-600 italic leading-relaxed bg-purple-50/40 p-4 pl-5 rounded-lg">
+                "{post.excerpt}"
+              </p>
+            </div>
 
             {/* Body Content */}
-            <div className="space-y-4 text-sm sm:text-base text-gray-700 leading-relaxed pt-2">
+            <div className="space-y-3.5 text-sm text-slate-700 leading-[1.8] pt-1">
               {post.content.split('\n\n').map((paragraph, index) => (
-                <p key={index} className="leading-relaxed">
+                <p key={index} className="leading-[1.8]">
                   {paragraph}
                 </p>
               ))}
             </div>
 
+            {/* Engagement Stats */}
+            <div className="flex items-center gap-3 pt-3">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200/60">
+                <svg className="w-3.5 h-3.5 text-rose-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <span className="text-[11px] font-bold text-slate-700">{post.likes || 0} likes</span>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200/60">
+                <svg className="w-3.5 h-3.5 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span className="text-[11px] font-bold text-slate-700">{(post.views || 0).toLocaleString()} views</span>
+              </div>
+            </div>
+
             {/* Tags */}
             {tags.length > 0 && (
-              <div className="pt-6 border-t border-gray-100 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold uppercase text-gray-400 mr-1">Tags:</span>
+              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase text-slate-400 mr-1">Tags:</span>
                 {tags.map((tag) => (
                   <span
                     key={tag}
-                    className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold"
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-semibold hover:bg-purple-50 hover:text-[#8F3EC9] transition-colors cursor-pointer"
                   >
                     #{tag}
                   </span>
@@ -181,77 +215,96 @@ const BlogViewPage = () => {
           </div>
         </article>
 
-        {/* Right 4 cols: Article Info Sidebar */}
-        <aside className="lg:col-span-4 space-y-5">
+        {/* Right: Sidebar */}
+        <aside className="lg:col-span-4 space-y-5 animate-slide-in-right">
           {/* Metadata Card */}
-          <div className="p-6 bg-white rounded-2xl border border-gray-100 shadow-2xs space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          <div className="p-5 bg-white rounded-xl border border-slate-200/80 space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               Article Properties
             </h3>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Live Status</span>
-                <span className="font-bold text-gray-800 capitalize">{post.status}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Category</span>
-                <span className="font-bold text-[#8F3EC9]">{post.category}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Author</span>
-                <span className="font-bold text-gray-800">{post.author}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Published Date</span>
-                <span className="font-bold text-gray-800">{post.publishedAt}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-50">
-                <span className="text-gray-500">Read Time</span>
-                <span className="font-bold text-gray-800">{post.readTime}</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-gray-500">Image Reference</span>
-                <span className="font-mono text-gray-700">{post.image}.png</span>
-              </div>
+            <div className="space-y-0 text-xs">
+              {[
+                { label: 'Live Status', value: post.status, isStatus: true },
+                { label: 'Category', value: post.category, isCategory: true },
+                { label: 'Author', value: post.author },
+                { label: 'Published', value: post.publishedAt },
+                { label: 'Read Time', value: post.readTime },
+                { label: 'Image Ref', value: `${post.image}.png`, isMono: true },
+              ].map((item, i) => (
+                <div key={i} className="flex justify-between py-2.5 border-b border-slate-50 last:border-0">
+                  <span className="text-slate-500 font-medium">{item.label}</span>
+                  <span className={`font-bold ${
+                    item.isCategory ? 'text-[#8F3EC9]' :
+                    item.isStatus ? (post.status === 'published' ? 'text-emerald-600' : 'text-amber-600') :
+                    item.isMono ? 'font-mono text-slate-600' :
+                    'text-slate-800'
+                  } capitalize`}>
+                    {item.value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Frontend Reference Card */}
-          <div className="p-6 bg-white rounded-2xl border border-gray-100 shadow-2xs space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+          {/* Frontend URL Card */}
+          <div className="p-5 bg-white rounded-xl border border-slate-200/80 space-y-2.5">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
               Frontend Public URL
             </h3>
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-gray-700 break-all">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 break-all">
               /blog/{post.slug}
             </div>
-            <p className="text-[11px] text-gray-400 leading-normal">
+            <p className="text-[10px] text-slate-400 leading-relaxed">
               This route matches the Energy-Autonomy customer frontend blog reader.
             </p>
           </div>
 
           {/* Quick Nav Card */}
-          <div className="p-6 bg-purple-50/50 rounded-2xl border border-purple-100/80 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#8F3EC9]">
+          <div className="p-5 bg-gradient-to-br from-purple-50/80 to-violet-50/50 rounded-xl border border-purple-100/60 space-y-3">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#8F3EC9] flex items-center gap-1.5">
               Next Actions
             </h3>
             <div className="space-y-2">
               <Link
                 to={`/blog/edit/${post.id}`}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-white border border-purple-200 text-[#8F3EC9] text-xs font-bold hover:bg-purple-50 transition-colors shadow-2xs"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-white border border-purple-200 text-[#8F3EC9] text-xs font-bold hover:bg-purple-50 transition-all shadow-sm"
               >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
                 Edit This Article
               </Link>
               <Link
                 to="/blog/create"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#8F3EC9] text-white text-xs font-bold hover:bg-[#7B2EB3] transition-colors shadow-xs"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-[#8F3EC9] text-white text-xs font-bold hover:bg-[#7B2EB3] transition-all shadow-sm"
               >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
                 Write Another Article
               </Link>
             </div>
           </div>
         </aside>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirm}
+        onClose={() => setDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete Blog Post"
+        message={`Are you sure you want to delete "${post.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        type="danger"
+      />
     </div>
   );
 };
