@@ -129,7 +129,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
         },
       }),
       Placeholder.configure({
-        placeholder: 'Tell your story...',
+        placeholder: 'Write your blog...',
       }),
       TextStyle,
       Color,
@@ -471,17 +471,6 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
                 title="Add Image"
               >
                 <ImageIcon className="w-4 h-4" />
-              </button>
-
-              {/* Video Embed Option */}
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setShowVideoModal(true)}
-                className="w-8 h-8 rounded-full border border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
-                title="Embed Video (YouTube)"
-              >
-                <Video className="w-4 h-4" />
               </button>
 
               {/* Divider Option */}
