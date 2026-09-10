@@ -49,7 +49,7 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen bg-white flex flex-col z-40 select-none border-r border-slate-200/80 shadow-[2px_0_16px_rgba(0,0,0,0.02)] transition-all duration-300 ease-in-out overflow-x-hidden ${
+      className={`fixed top-0 left-0 h-screen bg-[#F7F8FA] flex flex-col z-40 select-none border-r border-slate-200/80 shadow-[2px_0_16px_rgba(0,0,0,0.02)] transition-all duration-300 ease-in-out overflow-x-hidden ${
         isSidebarExpanded ? 'w-[240px]' : 'w-[64px]'
       }`}
     >
@@ -78,7 +78,7 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
                 e.stopPropagation();
                 setIsSidebarExpanded(false);
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0 ml-auto"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer shrink-0 ml-auto"
               title="Collapse Sidebar"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,7 +128,7 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
                   } ${
                     isActive
                       ? 'bg-purple-50/80 text-[#8F3EC9] font-medium border border-purple-200/80 shadow-[0_2px_8px_rgba(143,62,201,0.06)]'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent font-normal'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent font-normal'
                   }`}
                 >
                   {/* Continuous Ambient Shimmer on Active */}
@@ -162,7 +162,7 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
       </div>
 
       {/* ── Admin User Profile & Dropdown Popup ── */}
-      <div className={`border-t border-slate-200/80 bg-white relative ${isSidebarExpanded ? 'p-3' : 'p-2 flex justify-center'}`}>
+      <div className={`border-t border-slate-200/80 bg-inherit relative ${isSidebarExpanded ? 'p-3' : 'p-2 flex justify-center'}`}>
         {/* Popup Menu Above */}
         {isProfileOpen && isSidebarExpanded && (
           <>
@@ -210,7 +210,7 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
               setIsProfileOpen(!isProfileOpen);
             }
           }}
-          className={`rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer group ${
+          className={`rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer group ${
             isSidebarExpanded ? 'w-full flex items-center justify-between p-2' : 'w-10 h-10 flex items-center justify-center p-0'
           }`}
         >
@@ -246,12 +246,12 @@ const AdminLayout = ({ children }) => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] text-slate-900 flex subpixel-antialiased">
+    <div className="min-h-screen bg-[#FAFBFC] text-slate-900 flex subpixel-antialiased">
       <Sidebar isSidebarExpanded={isSidebarExpanded} setIsSidebarExpanded={setIsSidebarExpanded} />
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out bg-[#FAFBFC] ${
         isSidebarExpanded ? 'ml-[240px]' : 'ml-[64px]'
       }`}>
-        <main className="flex-1 p-6 sm:p-8 lg:p-10 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-[#FAFBFC]">
           {children}
         </main>
       </div>

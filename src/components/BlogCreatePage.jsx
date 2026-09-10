@@ -37,7 +37,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [tags, setTags] = useState(['Energy Autonomy', 'Sustainability', 'Green Tech'])
   const [newTagInput, setNewTagInput] = useState('')
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false)
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   
   const [editorJson, setEditorJson] = useState({
@@ -160,7 +160,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       {/* PERSISTENT ICON-ONLY / EXPANDABLE SIDEBAR                     */}
       {/* ------------------------------------------------------------- */}
       <aside
-        className={`fixed top-0 left-0 h-full bg-white border-r border-slate-200/80 z-40 flex flex-col transition-all duration-300 ease-in-out select-none shadow-[2px_0_12px_rgba(0,0,0,0.02)] overflow-x-hidden ${
+        className={`fixed top-0 left-0 h-full bg-[#F7F8FA] border-r border-slate-200/80 z-40 flex flex-col transition-all duration-300 ease-in-out select-none shadow-[2px_0_12px_rgba(0,0,0,0.02)] overflow-x-hidden ${
           isSidebarExpanded ? 'w-[240px]' : 'w-[64px]'
         }`}
       >
@@ -189,7 +189,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   e.stopPropagation();
                   setIsSidebarExpanded(false);
                 }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer shrink-0 ml-auto"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer shrink-0 ml-auto"
                 title="Collapse Sidebar"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -224,8 +224,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               to="/dashboard"
               className={`transition-all duration-200 ${
                 isSidebarExpanded
-                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 p-0'
+                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 p-0'
               }`}
             >
               <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
@@ -250,8 +250,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               to="/blog"
               className={`transition-all duration-200 ${
                 isSidebarExpanded
-                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 p-0'
+                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 p-0'
               }`}
             >
               <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
@@ -363,7 +363,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 setIsProfileOpen(!isProfileOpen)
               }
             }}
-            className={`rounded-lg hover:bg-slate-100/80 transition-colors cursor-pointer group ${
+            className={`rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer group ${
               isSidebarExpanded ? 'w-full flex items-center justify-between p-2' : 'w-10 h-10 flex items-center justify-center p-0'
             }`}
           >

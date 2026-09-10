@@ -87,7 +87,7 @@ const BlogListPage = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-4 px-2 sm:px-4 space-y-6 animate-fade-in text-slate-900">
+    <div className="w-full max-w-6xl mx-auto py-2 px-1 sm:px-3 space-y-6 animate-fade-in text-slate-900">
       {/* ── Global Floating Toast Notification ── */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-scale-in border border-slate-700">
@@ -119,9 +119,9 @@ const BlogListPage = () => {
         </Link>
       </div>
 
-      {/* ── Tabs Navigation: Published (First), Drafts (Second) ── */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 pb-0">
-        <div className="flex items-center gap-6 sm:gap-8">
+      {/* ── Tabs Navigation: Published (First), Drafts (Second) + Aligned Search ── */}
+      <div className="flex items-center justify-between border-b border-slate-200/80 pb-0 gap-4">
+        <div className="flex items-center gap-6 sm:gap-8 -mb-[1px]">
           {/* Tab 1: Published */}
           <button
             type="button"
@@ -129,7 +129,7 @@ const BlogListPage = () => {
               setActiveTab('published');
               setOpenMenuId(null);
             }}
-            className={`pb-3 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
+            className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'published'
                 ? 'font-bold text-slate-900 border-b-2 border-slate-900'
                 : 'font-normal text-slate-500 hover:text-slate-800'
@@ -146,7 +146,7 @@ const BlogListPage = () => {
               setActiveTab('draft');
               setOpenMenuId(null);
             }}
-            className={`pb-3 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
+            className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'draft'
                 ? 'font-bold text-slate-900 border-b-2 border-slate-900'
                 : 'font-normal text-slate-500 hover:text-slate-800'
@@ -157,27 +157,27 @@ const BlogListPage = () => {
           </button>
         </div>
 
-        {/* Search Input (Subtle & Clean) */}
-        <div className="relative pb-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-36 sm:w-48 pl-7 pr-3 py-1 text-xs bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8F3EC9] focus:border-[#8F3EC9] transition-all"
-          />
+        {/* Search Input (Properly centered & aligned with toolbar) */}
+        <div className="relative pb-2 flex items-center">
           <svg
-            className="w-3.5 h-3.5 absolute left-2 top-2.5 text-slate-400 pointer-events-none"
+            className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 pointer-events-none"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search stories..."
+            className="w-40 sm:w-60 pl-8 pr-7 py-1.5 text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200/90 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8F3EC9] focus:border-[#8F3EC9] transition-all font-normal shadow-2xs"
+          />
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-xs"
+              className="absolute right-2 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 hover:text-slate-600 text-xs w-4 h-4 flex items-center justify-center cursor-pointer"
             >
               ✕
             </button>
@@ -186,7 +186,7 @@ const BlogListPage = () => {
       </div>
 
       {/* ── Stories List ── */}
-      <div className="divide-y divide-slate-100">
+      <div className="divide-y divide-slate-200/60">
         {displayedPosts.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
             <p className="text-sm font-medium">
@@ -209,7 +209,7 @@ const BlogListPage = () => {
             return (
               <div
                 key={post.id}
-                className="py-5 flex items-center justify-between gap-4 group transition-colors relative"
+                className="py-4 px-2 sm:px-3 flex items-center justify-between gap-4 group transition-colors relative hover:bg-white/80 rounded-xl"
               >
                 {/* Left: Thumbnail + Title + Description + Meta */}
                 <div className="flex items-start gap-4 min-w-0 flex-1">
