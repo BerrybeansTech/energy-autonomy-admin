@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom'
 import MediumEditor from './MediumEditor'
 import { useBlog } from '../context/BlogContext'
 import { useAuth } from '../context/AuthContext'
 import {
-  ArrowLeft,
   Eye,
   Edit3,
   Send,
@@ -16,7 +15,9 @@ import {
   LayoutDashboard,
   FileText,
   PenSquare,
-  Type
+  Type,
+  ArrowLeft,
+  ChevronUp
 } from 'lucide-react'
 
 const BlogCreatePage = ({ onBackToDashboard }) => {
@@ -39,6 +40,26 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
+
+  const titleTextareaRef = useRef(null)
+  const subtitleTextareaRef = useRef(null)
+
+  // Auto-resize title textarea to fit multiline content
+  useEffect(() => {
+    if (titleTextareaRef.current) {
+      titleTextareaRef.current.style.height = 'auto'
+      titleTextareaRef.current.style.height = titleTextareaRef.current.scrollHeight + 'px'
+    }
+  }, [title])
+
+
+  // Auto-resize subtitle textarea to fit multiline content
+  useEffect(() => {
+    if (subtitleTextareaRef.current) {
+      subtitleTextareaRef.current.style.height = 'auto'
+      subtitleTextareaRef.current.style.height = subtitleTextareaRef.current.scrollHeight + 'px'
+    }
+  }, [subtitle, showSubtitleInput])
   
   const [editorJson, setEditorJson] = useState({
     type: 'doc',
@@ -399,29 +420,14 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       <div className={`flex-1 flex flex-col min-h-screen bg-white transition-all duration-300 ease-in-out ${
         isSidebarExpanded ? 'pl-[240px]' : 'pl-[64px]'
       }`}>
-        {/* Top Action Bar */}
-        <div className="w-full px-6 sm:px-12 md:px-20 lg:px-28 xl:px-36 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (onBackToDashboard) onBackToDashboard()
-                else navigate('/blog')
-              }}
-              className="px-3 py-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors flex items-center space-x-1.5 text-xs font-semibold cursor-pointer border border-zinc-200"
-              title="Back to Blogs"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back</span>
-            </button>
-          </div>
-
+        {/* Top Action Bar (Clean right-aligned controls, Back button removed) */}
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 py-4 flex items-center justify-end">
           {/* Right Action Controls */}
           <div className="flex items-center space-x-3">
             {/* Preview Toggle */}
             <button
               onClick={() => setIsPreviewMode(!isPreviewMode)}
-              className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 isPreviewMode
                   ? 'bg-zinc-900 text-white shadow-xs'
                   : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200'
@@ -463,21 +469,21 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* CANVAS MAIN BODY                                             */}
+        {/* CANVAS MAIN BODY (Increased Width to max-w-5xl)               */}
         {/* ------------------------------------------------------------- */}
-        <main className="flex-1 w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-20 lg:px-28 xl:px-32 pb-20">
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 pb-24">
         {!isPreviewMode ? (
           /* ================= EDIT MODE ================= */
           <div className="space-y-4">
-            {/* Top Toolbar Row: Add Cover Image & Add Subtitle Buttons */}
-            <div className="flex items-center gap-3 pt-2">
+            {/* Top Toolbar Row: Clean Borderless Inline Add Cover & Add Subtitle */}
+            <div className="flex items-center gap-5 pt-2">
               {!coverImage && !showCoverInput && (
                 <button
                   type="button"
                   onClick={() => setShowCoverInput(true)}
-                  className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200/80 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-[#8F3EC9] transition-colors cursor-pointer py-1 select-none group"
                 >
-                  <ImageIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                  <ImageIcon className="w-4 h-4 text-[#8F3EC9] group-hover:scale-110 transition-transform" />
                   <span>Add cover image</span>
                 </button>
               )}
@@ -486,9 +492,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 <button
                   type="button"
                   onClick={() => setShowSubtitleInput(true)}
-                  className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-100 px-3 py-1.5 rounded-lg border border-zinc-200/80 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-[#8F3EC9] transition-colors cursor-pointer py-1 select-none group"
                 >
-                  <Type className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                  <Type className="w-4 h-4 text-[#8F3EC9] group-hover:scale-110 transition-transform" />
                   <span>Add subtitle</span>
                 </button>
               )}
@@ -497,7 +503,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {/* Cover Image Header Section */}
             <div className="relative group">
               {coverImage ? (
-                <div className="relative w-full h-72 rounded-2xl overflow-hidden border border-zinc-200 group">
+                <div className="relative w-full h-80 rounded-2xl overflow-hidden border border-zinc-200 group">
                   <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
                   <button
                     onClick={() => setCoverImage('')}
@@ -533,27 +539,29 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               )}
             </div>
 
-            {/* Title Input */}
+            {/* Title Input (Multiline Auto-expanding, aligned with content starting line) */}
             <div className="pt-2">
-              <input
-                type="text"
+              <textarea
+                ref={titleTextareaRef}
+                rows={1}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title"
-                className="w-full font-medium-serif text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 py-2 bg-transparent"
+                className="w-full font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent resize-none overflow-hidden leading-tight block"
               />
             </div>
 
-            {/* Subtitle Input (Shows when Add Subtitle is clicked or has content) */}
+            {/* Subtitle Input (Multiline Auto-expanding, equal gap above and below) */}
             {(showSubtitleInput || subtitle) && (
-              <div className="relative flex items-center group/sub animate-fade-in">
-                <input
-                  type="text"
+              <div className="relative flex items-start group/sub animate-fade-in my-3.5">
+                <textarea
+                  ref={subtitleTextareaRef}
+                  rows={1}
                   autoFocus={showSubtitleInput && !subtitle}
                   value={subtitle}
                   onChange={(e) => setSubtitle(e.target.value)}
                   placeholder="Write a subtitle..."
-                  className="w-full font-medium-sans text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 pb-2 bg-transparent pr-8"
+                  className="w-full font-medium-sans italic text-lg sm:text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent pr-8 resize-none overflow-hidden leading-relaxed block"
                 />
                 <button
                   type="button"
@@ -561,7 +569,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     setSubtitle('')
                     setShowSubtitleInput(false)
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600 p-1 rounded transition-colors cursor-pointer"
+                  className="absolute right-0 top-0 text-zinc-300 hover:text-zinc-600 p-1 rounded transition-colors cursor-pointer"
                   title="Remove Subtitle"
                 >
                   <X className="w-4 h-4" />
@@ -569,25 +577,27 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               </div>
             )}
 
-            {/* Divider Line under Subtitle / Description */}
-            <div className="border-b border-zinc-200/80 my-4" />
+            {/* Default Divider Line under Subtitle / Header */}
+            <div className="border-b border-zinc-200/80 my-5" />
 
             {/* Core Medium Tiptap Editor Component */}
-            <MediumEditor
-              onJsonUpdate={(json) => setEditorJson(json)}
-              initialContent={editorJson}
-            />
+            <div>
+              <MediumEditor
+                onJsonUpdate={(json) => setEditorJson(json)}
+                initialContent={editorJson}
+              />
+            </div>
           </div>
         ) : (
           /* ================= READER PREVIEW MODE ================= */
           <article className="space-y-8 animate-in fade-in duration-300">
             {/* Title & Subtitle */}
             <header className="space-y-4">
-              <h1 className="font-medium-serif text-4xl md:text-5xl font-extrabold text-zinc-900 leading-tight">
+              <h1 className="font-lora text-4xl md:text-5xl font-extrabold text-zinc-900 leading-tight">
                 {title || 'Untitled Blog Post'}
               </h1>
               {subtitle && (
-                <p className="font-medium-sans text-xl text-zinc-600 font-light leading-relaxed">
+                <p className="font-medium-sans italic text-xl text-zinc-600 font-light leading-relaxed my-3.5">
                   {subtitle}
                 </p>
               )}

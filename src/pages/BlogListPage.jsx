@@ -172,7 +172,7 @@ const BlogListPage = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search stories..."
-            className="w-40 sm:w-60 pl-8 pr-7 py-1.5 text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-200/90 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8F3EC9] focus:border-[#8F3EC9] transition-all font-normal shadow-2xs"
+            className="w-40 sm:w-56 pl-8 pr-7 py-1.5 text-xs bg-white hover:bg-slate-50/80 focus:bg-white border border-slate-200/70 rounded-lg focus:outline-none focus:border-[#8F3EC9]/60 transition-all font-normal placeholder:text-slate-400"
           />
           {search && (
             <button
@@ -229,7 +229,7 @@ const BlogListPage = () => {
                   <div className="min-w-0 flex-1">
                     <h2
                       onClick={() => navigate(`/blog/view/${post.id}`)}
-                      className="text-[15px] sm:text-base font-bold text-slate-900 hover:text-[#8F3EC9] cursor-pointer line-clamp-1 leading-snug transition-colors"
+                      className="text-[15px] sm:text-base font-bold font-lora text-slate-900 hover:text-[#8F3EC9] cursor-pointer line-clamp-1 leading-snug transition-colors"
                       title={post.title}
                     >
                       {post.title}

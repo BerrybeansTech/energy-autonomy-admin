@@ -282,7 +282,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
   const currentColor = editor.getAttributes('textStyle').color || '#292929'
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-4xl mx-auto tiptap-editor pl-12">
+    <div ref={containerRef} className="relative w-full tiptap-editor">
       {/* ------------------------------------------------------------- */}
       {/* SELECTION BUBBLE TOOLBAR                                      */}
       {/* ------------------------------------------------------------- */}
@@ -457,7 +457,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
       {plusPosition.show && (
         <div
           style={{ top: `${plusPosition.top}px` }}
-          className="absolute left-0 z-30 flex items-center space-x-2 transition-all duration-150"
+          className="absolute -left-10 z-30 flex items-center space-x-2 transition-all duration-150"
         >
           {/* Plus Toggle Button */}
           <button

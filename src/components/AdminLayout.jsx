@@ -251,7 +251,7 @@ const AdminLayout = ({ children }) => {
       <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out bg-[#FAFBFC] ${
         isSidebarExpanded ? 'ml-[240px]' : 'ml-[64px]'
       }`}>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-[#FAFBFC]">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-[#FAFBFC]">
           {children}
         </main>
       </div>

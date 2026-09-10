@@ -74,17 +74,17 @@ const ScrollToTop = () => {
       type="button"
       onClick={handleScrollToTop}
       aria-label="Scroll to top"
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-white/95 backdrop-blur-md border border-purple-200/90 text-slate-800 shadow-[0_10px_30px_rgba(143,62,201,0.2)] hover:shadow-[0_14px_40px_rgba(143,62,201,0.3)] hover:border-[#8F3EC9] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 animate-scale-in group cursor-pointer select-none"
+      className="fixed bottom-7 right-7 z-50 w-11 h-11 rounded-full border border-slate-300 hover:border-[#8F3EC9] text-slate-500 hover:text-[#8F3EC9] bg-white/95 backdrop-blur-xs flex items-center justify-center transition-colors duration-150 shadow-xs cursor-pointer select-none"
       title="Scroll to top"
     >
-      <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform duration-200">
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-        </svg>
-      </div>
-      <span className="text-xs font-bold text-slate-700 group-hover:text-[#8F3EC9] transition-colors pr-1">
-        Top
-      </span>
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 15l7-7 7 7" />
+      </svg>
     </button>
   );
 };
