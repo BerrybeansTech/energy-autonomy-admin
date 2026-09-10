@@ -116,46 +116,47 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] text-[#242424] flex flex-col font-medium-sans">
+    <div className="min-h-screen bg-white text-[#242424] flex flex-col font-medium-sans">
       {/* ------------------------------------------------------------- */}
       {/* TOP ADMIN HEADER / ACTION BAR                                */}
       {/* ------------------------------------------------------------- */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-zinc-200/80 px-6 py-3.5 flex items-center justify-between shadow-xs">
+      <header className="sticky top-0 z-30 bg-white border-b border-zinc-200/80 px-8 sm:px-12 md:px-16 lg:px-20 py-4 flex items-center justify-between shadow-2xs">
         <div className="flex items-center space-x-4">
           {onBackToDashboard && (
             <button
               onClick={onBackToDashboard}
-              className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors flex items-center space-x-1.5 text-sm font-medium"
+              className="px-3 py-1.5 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors flex items-center space-x-2 text-xs font-semibold cursor-pointer border border-zinc-200"
+              title="Back to Blog Management"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
+              <span>Back to Blogs</span>
             </button>
           )}
 
           <div className="h-4 w-[1px] bg-zinc-200" />
 
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs text-zinc-500 font-medium">Draft Saved</span>
+          {/* Top Navbar Brand Icon */}
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] flex items-center justify-center text-white shadow-xs">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs font-bold text-zinc-900 tracking-tight">Energy Autonomy</span>
+              <span className="text-[10px] font-bold text-[#8F3EC9] bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100/80">
+                Story Editor
+              </span>
+            </div>
           </div>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center space-x-3">
-          {/* JSON Export Button */}
-          <button
-            onClick={() => setIsJsonModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200/80 rounded-full transition-colors border border-zinc-200"
-            title="Inspect / Export Editor JSON"
-          >
-            <Code2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span>JSON Format</span>
-          </button>
-
           {/* Preview Toggle */}
           <button
             onClick={() => setIsPreviewMode(!isPreviewMode)}
-            className={`flex items-center space-x-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+            className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
               isPreviewMode
                 ? 'bg-zinc-900 text-white shadow-xs'
                 : 'text-zinc-700 bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200'
@@ -174,13 +175,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             )}
           </button>
 
-          {/* Publish Primary Button */}
+          {/* Publish Primary Button (Using Site Primary Color #8F3EC9) */}
           <button
             onClick={handlePublish}
-            className="flex items-center space-x-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-[#1a8917] hover:bg-[#156e13] rounded-full shadow-sm transition-colors"
+            className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] rounded-xl shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>Publish</span>
+            <span>Publish Post</span>
           </button>
         </div>
       </header>
@@ -191,7 +192,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           <div>
             <p className="text-xs font-semibold">Blog Article Published!</p>
-            <p className="text-[11px] text-zinc-400">JSON schema exported & ready for live website</p>
+            <p className="text-[11px] text-zinc-400">Post saved and added to blog list</p>
           </div>
         </div>
       )}
