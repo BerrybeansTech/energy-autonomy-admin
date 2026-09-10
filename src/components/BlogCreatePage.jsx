@@ -39,7 +39,7 @@ export function generateSlug(text) {
 }
 
 const BlogCreatePage = ({ onBackToDashboard }) => {
-  const { logout } = useAuth() || {}
+  const { user, logout } = useAuth() || {}
   const { id } = useParams()
   const blogContext = useBlog()
   const addPost = blogContext?.addPost
@@ -61,9 +61,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [tags, setTags] = useState(['ENERGY & AWARENESS'])
   const [isPublishing, setIsPublishing] = useState(false)
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
+  const [isPublishDrawerOpen, setIsPublishDrawerOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
-  const [isProfileOpen, setIsProfileOpen] = useState(false)
 
   const titleTextareaRef = useRef(null)
   const subtitleTextareaRef = useRef(null)
@@ -168,6 +168,31 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     return { wordCount: words, readingTime: minutes }
   }, [title, subtitle, editorJson])
 
+  // Verify if the user has entered content in the blog body ("Write your blog...")
+  const hasBlogContent = useMemo(() => {
+    if (!editorJson) return false
+    let found = false
+    const checkNode = (node) => {
+      if (!node || found) return
+      if (typeof node.text === 'string' && node.text.trim().length > 0) {
+        found = true
+        return
+      }
+      if (node.type === 'image' || node.type === 'youtube') {
+        found = true
+        return
+      }
+      if (node.content && Array.isArray(node.content)) {
+        for (const child of node.content) {
+          checkNode(child)
+          if (found) return
+        }
+      }
+    }
+    checkNode(editorJson)
+    return found
+  }, [editorJson])
+
   // Cover Image upload via backend /api/upload
   const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -209,14 +234,51 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
   // Publish / Update Handler using REST API
   const handlePublish = async () => {
-    if (!title.trim()) {
-      setErrorMessage('Please enter a title for your blog post.')
+    // 1. Content in editor is compulsory
+    if (!hasBlogContent) {
+      setErrorMessage('Please write your blog content before publishing.')
+      return
+    }
+
+    // 2. Cover image is compulsory
+    if (!coverImage) {
+      setErrorMessage('Cover image is compulsory. Please upload a cover image for your article.')
+      return
+    }
+
+    // 3. Title is compulsory
+    if (!title || !title.trim()) {
+      setErrorMessage('Title is compulsory. Please enter an article title.')
+      return
+    }
+
+    // 4. Subtitle / Summary is compulsory
+    if (!subtitle || !subtitle.trim()) {
+      setErrorMessage('Subtitle / Summary excerpt is compulsory. Please enter a subtitle.')
+      return
+    }
+
+    // 5. Category is compulsory
+    if (!tags[0] || !tags[0].trim()) {
+      setErrorMessage('Category is compulsory. Please select a category for your article.')
+      return
+    }
+
+    // 6. Permalink (URL Slug) is compulsory
+    const cleanSlug = (slug && slug.trim()) ? generateSlug(slug) : generateSlug(title.trim())
+    if (!cleanSlug) {
+      setErrorMessage('Permalink (URL slug) is compulsory. Please enter a valid URL slug.')
+      return
+    }
+
+    // 7. Status is compulsory
+    if (!status) {
+      setErrorMessage('Publication status is compulsory. Please select Published or Draft.')
       return
     }
 
     const cleanTitle = title.trim()
-    const autoSlug = generateSlug(cleanTitle)
-    const finalSlug = (slug && slug.trim()) ? generateSlug(slug) : (autoSlug || `post-${Date.now()}`)
+    const finalSlug = cleanSlug
 
     setErrorMessage('')
     setIsPublishing(true)
@@ -225,11 +287,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       title: cleanTitle,
       slug: finalSlug,
       contentJson: editorJson,
-      featuredImage: coverImage || null,
-      categoryName: tags[0] || 'ENERGY & AWARENESS',
+      featuredImage: coverImage,
+      categoryName: tags[0].trim(),
       status: status || 'published',
       seoTitle: cleanTitle,
-      seoDescription: subtitle ? subtitle.trim() : (cleanTitle ? `${cleanTitle} - Energy Autonomy` : ''),
+      seoDescription: subtitle.trim(),
     }
 
     try {
@@ -239,6 +301,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         await addPost(postPayload)
       }
       setIsPublishSuccess(true)
+      setIsPublishDrawerOpen(false)
       setTimeout(() => {
         setIsPublishSuccess(false)
         if (onBackToDashboard) {
@@ -257,6 +320,18 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     } finally {
       setIsPublishing(false)
     }
+  }
+
+  const handleOpenPublishDrawer = () => {
+    if (!hasBlogContent) {
+      setErrorMessage('Please write your blog content before publishing.')
+      return
+    }
+    if (!slug && title.trim()) {
+      setSlug(generateSlug(title))
+    }
+    setErrorMessage('')
+    setIsPublishDrawerOpen(true)
   }
 
   return (
@@ -401,85 +476,94 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className={`border-t border-slate-100 relative ${isSidebarExpanded ? 'p-3' : 'p-2 flex justify-center'}`}>
-          {isProfileOpen && isSidebarExpanded && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setIsProfileOpen(false)}
-              />
-              <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-2.5 z-50 animate-scale-in origin-bottom">
-                <div className="p-1.5 space-y-0.5">
+        <div className={`border-t border-slate-200 bg-inherit ${isSidebarExpanded ? 'p-3 pb-3.5 space-y-2.5' : 'p-2 flex flex-col items-center gap-2'}`}>
+          {isSidebarExpanded ? (
+            <div className="space-y-2.5">
+              {/* User Info Header */}
+              <div className="flex items-center gap-2.5 px-1 pt-0.5">
+                <div className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white flex items-center justify-center font-medium text-sm shrink-0 shadow-2xs">
+                  {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-slate-900 truncate leading-tight">
+                    {user?.name || 'Admin'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5">
+                    {user?.email || 'admin@gmail.com'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Divider Line */}
+              <div className="border-t border-slate-200" />
+
+              {/* Actions */}
+              <div className="space-y-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onBackToDashboard) onBackToDashboard()
+                    else navigate('/blog')
+                  }}
+                  className="w-full h-9 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 shrink-0 text-slate-400" />
+                  <span>Exit Editor</span>
+                </button>
+
+                {logout && (
                   <button
                     type="button"
                     onClick={() => {
-                      setIsProfileOpen(false)
-                      if (onBackToDashboard) onBackToDashboard()
-                      else navigate('/blog')
+                      logout()
+                      navigate('/login')
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                    className="w-full h-10 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-lg transition-colors cursor-pointer"
                   >
-                    <ArrowLeft className="w-4 h-4 shrink-0 text-slate-400" />
-                    <span>Exit Editor</span>
+                    <svg className="w-4 h-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Sign out</span>
                   </button>
-
-                  {logout && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        logout()
-                        navigate('/login')
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <svg className="w-4 h-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                      <span>Sign out</span>
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              if (!isSidebarExpanded) {
-                setIsSidebarExpanded(true)
-                setIsProfileOpen(true)
-              } else {
-                setIsProfileOpen(!isProfileOpen)
-              }
-            }}
-            className={`rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer group ${
-              isSidebarExpanded ? 'w-full flex items-center justify-between p-2' : 'w-10 h-10 flex items-center justify-center p-0'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white text-xs font-medium flex items-center justify-center shrink-0 shadow-2xs">
-                A
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-1">
+              <div
+                title={`${user?.name || 'Admin'} (${user?.email || 'admin@gmail.com'})`}
+                className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white text-xs font-medium flex items-center justify-center shrink-0 shadow-2xs cursor-default"
+              >
+                {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
               </div>
-              {isSidebarExpanded && (
-                <span className="text-[13px] font-normal text-slate-800 truncate">
-                  Admin
-                </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onBackToDashboard) onBackToDashboard()
+                  else navigate('/blog')
+                }}
+                title="Exit Editor"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              {logout && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout()
+                    navigate('/login')
+                  }}
+                  title="Sign out"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50/80 transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
               )}
             </div>
-            {isSidebarExpanded && (
-              <svg
-                className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform duration-200 ${
-                  isProfileOpen ? 'rotate-180' : ''
-                }`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
-          </button>
+          )}
         </div>
       </aside>
 
@@ -504,33 +588,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           </button>
 
           {/* Right Action Controls */}
-          <div className="flex items-center space-x-2.5">
-            {/* Category Select */}
-            <select
-              value={tags[0] || 'ENERGY & AWARENESS'}
-              onChange={(e) => setTags([e.target.value])}
-              className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#8F3EC9] cursor-pointer max-w-[160px] truncate"
-              title="Select Category"
-            >
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-
-            {/* Status Select */}
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#8F3EC9] cursor-pointer"
-            >
-              <option value="published">🟢 Published</option>
-              <option value="draft">🟡 Draft</option>
-            </select>
-
+          <div className="flex items-center space-x-3">
             {/* Preview Toggle */}
             <button
+              type="button"
               onClick={() => setIsPreviewMode(!isPreviewMode)}
               className={`flex items-center space-x-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                 isPreviewMode
@@ -551,21 +612,15 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               )}
             </button>
 
-            {/* Publish / Save Primary Button */}
+            {/* Publish / Save Primary Button - Opens Right-Side Drawer */}
             <button
-              onClick={handlePublish}
+              type="button"
+              onClick={handleOpenPublishDrawer}
               disabled={isPublishing}
               className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
             >
-              {isPublishing ? (
-                <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <Send className="w-3.5 h-3.5" />
-              )}
-              <span>{isPublishing ? 'Saving...' : id ? 'Save Changes' : 'Publish Article'}</span>
+              <Send className="w-3.5 h-3.5" />
+              <span>{id ? 'Save Changes' : 'Publish Article'}</span>
             </button>
           </div>
         </div>
@@ -650,10 +705,12 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     <div className="flex items-center justify-between text-xs font-medium text-zinc-600">
                       <span>Upload cover image to server</span>
                       <button
+                        type="button"
                         onClick={() => setShowCoverInput(false)}
-                        className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                        className="text-slate-600 hover:text-slate-900 cursor-pointer p-1 rounded-lg hover:bg-slate-200/60 transition-colors"
+                        title="Dismiss"
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-4 h-4" strokeWidth={2.2} />
                       </button>
                     </div>
 
@@ -692,40 +749,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               />
             </div>
 
-            {/* Title-Based Live Permalink / URL Slug Generator */}
-            <div className="flex flex-wrap items-center gap-2 text-xs bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl">
-              <div className="flex items-center gap-1.5 text-slate-500 font-semibold shrink-0">
-                <LinkIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                <span>Permalink:</span>
-                <span className="text-slate-400 font-mono text-[11px]">/blog/view/</span>
-              </div>
-              <input
-                type="text"
-                value={slug}
-                onChange={(e) => {
-                  setSlug(generateSlug(e.target.value))
-                  setIsSlugEdited(true)
-                  if (errorMessage) setErrorMessage('')
-                }}
-                placeholder="post-slug-url"
-                className="bg-white border border-slate-200 rounded px-2 py-0.5 font-mono text-xs text-[#8F3EC9] font-bold outline-none focus:border-[#8F3EC9] flex-1 min-w-[140px]"
-              />
-              {isSlugEdited && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSlugEdited(false)
-                    setSlug(generateSlug(title))
-                  }}
-                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
-                  title="Reset slug from title"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset</span>
-                </button>
-              )}
-            </div>
-
             {/* Subtitle Input */}
             {(showSubtitleInput || subtitle) && (
               <div className="relative flex items-start group/sub animate-fade-in my-2">
@@ -744,10 +767,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     setSubtitle('')
                     setShowSubtitleInput(false)
                   }}
-                  className="absolute right-0 top-0 text-zinc-300 hover:text-zinc-600 p-1 rounded transition-colors cursor-pointer"
+                  className="absolute right-0 top-1 text-slate-700 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                   title="Remove Subtitle"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" strokeWidth={2.2} />
                 </button>
               </div>
             )}
@@ -758,7 +781,12 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {/* Core Medium Tiptap Editor Component */}
             <div>
               <MediumEditor
-                onJsonUpdate={(json) => setEditorJson(json)}
+                onJsonUpdate={(json) => {
+                  setEditorJson(json)
+                  if (errorMessage && errorMessage.toLowerCase().includes('blog content')) {
+                    setErrorMessage('')
+                  }
+                }}
                 initialContent={editorJson}
               />
             </div>
@@ -826,6 +854,317 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         )}
       </main>
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* RIGHT-SIDE PUBLISH DRAWER / POPUP MODAL                       */}
+      {/* ------------------------------------------------------------- */}
+      {isPublishDrawerOpen && (
+        <div className="fixed inset-0 z-50 overflow-hidden select-none">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-fade-in"
+            onClick={() => setIsPublishDrawerOpen(false)}
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-lg bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out border-l border-slate-200 animate-slide-in-right">
+              {/* Drawer Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    {id ? 'Review & Update Post' : 'Publish Article'}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                    <span>All fields marked with</span>
+                    <span className="text-rose-500 font-bold">*</span>
+                    <span>are compulsory to publish</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPublishDrawerOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Error Banner if any */}
+                {errorMessage && (
+                  <div className="flex items-center justify-between gap-2 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>{errorMessage}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setErrorMessage('')}
+                      className="text-red-400 hover:text-red-700 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {/* --- Section 1: Story Preview (Cover Image, Title, Subtitle) --- */}
+                <div className="space-y-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                    Story Preview
+                  </h4>
+
+                  {/* Cover Image Field */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Cover Image <span className="text-rose-500 font-bold">*</span>
+                    </label>
+                    {coverImage ? (
+                      <div className="relative w-full h-44 rounded-xl overflow-hidden border border-slate-200 group">
+                        <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <label className="px-3 py-1.5 bg-white text-slate-800 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition-colors shadow-sm">
+                            Change Image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCoverUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleRemoveCoverImage}
+                            className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors cursor-pointer shadow-sm"
+                            title="Remove Cover Image"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`p-5 border-2 border-dashed ${
+                        errorMessage.toLowerCase().includes('cover image') ? 'border-rose-300 bg-rose-50/30' : 'border-slate-200 bg-slate-50/60'
+                      } rounded-xl text-center hover:bg-purple-50/20 hover:border-purple-300 transition-all`}>
+                        {uploadingCover ? (
+                          <div className="flex items-center justify-center gap-2 py-3 text-xs font-semibold text-[#8F3EC9]">
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            <span>Uploading image to backend...</span>
+                          </div>
+                        ) : (
+                          <label className="cursor-pointer block py-1">
+                            <ImageIcon className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
+                            <span className="text-xs font-semibold text-[#8F3EC9] hover:underline block">
+                              Upload a cover image
+                            </span>
+                            <span className="text-[11px] text-slate-400 block mt-0.5">
+                              Recommended: 16:9 high resolution image
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCoverUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title Input */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Title <span className="text-rose-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={handleTitleChange}
+                      placeholder="Article title..."
+                      className={`w-full px-3.5 py-2.5 bg-white text-sm font-bold text-slate-900 rounded-xl border ${
+                        !title.trim() && errorMessage.toLowerCase().includes('title') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all`}
+                    />
+                  </div>
+
+                  {/* Subtitle Input */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Subtitle / Summary Excerpt <span className="text-rose-500 font-bold">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={subtitle}
+                      onChange={(e) => {
+                        setSubtitle(e.target.value)
+                        if (errorMessage) setErrorMessage('')
+                      }}
+                      placeholder="Write a brief subtitle or summary for readers..."
+                      className={`w-full px-3.5 py-2 text-xs text-slate-700 rounded-xl border ${
+                        !subtitle.trim() && errorMessage.toLowerCase().includes('subtitle') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all`}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* --- Section 2: Publishing Settings (Category, Permalink, Status) --- */}
+                <div className="space-y-4">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <LinkIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                    Publishing Settings
+                  </h4>
+
+                  {/* Category Selection */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Category <span className="text-rose-500 font-bold">*</span>
+                    </label>
+                    <select
+                      value={tags[0] || 'ENERGY & AWARENESS'}
+                      onChange={(e) => {
+                        setTags([e.target.value])
+                        if (errorMessage) setErrorMessage('')
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none cursor-pointer"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Permalink / URL Slug */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Permalink (URL Slug) <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      {isSlugEdited && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSlugEdited(false)
+                            setSlug(generateSlug(title))
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
+                          title="Reset slug from title"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Reset</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className={`flex items-center rounded-xl border ${
+                      !slug.trim() && errorMessage.toLowerCase().includes('permalink') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
+                    } bg-white px-3.5 py-2.5 focus-within:border-[#8F3EC9] focus-within:ring-1 focus-within:ring-[#8F3EC9] transition-all`}>
+                      <span className="text-xs font-medium text-slate-400 select-none shrink-0 pr-1">
+                        /blog/view/
+                      </span>
+                      <input
+                        type="text"
+                        value={slug}
+                        onChange={(e) => {
+                          setSlug(generateSlug(e.target.value))
+                          setIsSlugEdited(true)
+                          if (errorMessage) setErrorMessage('')
+                        }}
+                        placeholder="article-url-slug"
+                        className="flex-1 bg-transparent text-xs font-semibold text-[#8F3EC9] outline-none"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      The permanent web link for readers to access this story.
+                    </p>
+                  </div>
+
+                  {/* Status Selection */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Status <span className="text-rose-500 font-bold">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setStatus('published')}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          status === 'published'
+                            ? 'border-emerald-500 bg-emerald-50/70 text-emerald-800 ring-1 ring-emerald-500'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                        <div className="text-left">
+                          <div className="leading-tight">Published</div>
+                          <div className="text-[10px] font-normal text-slate-500">Live for all readers</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStatus('draft')}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          status === 'draft'
+                            ? 'border-amber-500 bg-amber-50/70 text-amber-800 ring-1 ring-amber-500'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                        <div className="text-left">
+                          <div className="leading-tight">Draft</div>
+                          <div className="text-[10px] font-normal text-slate-500">Keep in preparation</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPublishDrawerOpen(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                >
+                  Keep Editing
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={isPublishing}
+                  className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-xl shadow-md shadow-purple-500/15 hover:shadow-lg transition-all cursor-pointer"
+                >
+                  {isPublishing ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span>Saving to Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>{status === 'published' ? (id ? 'Save & Update Now' : 'Publish Article Now') : 'Save as Draft'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

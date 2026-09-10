@@ -82,7 +82,11 @@ export const BlogProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { isAuthenticated } = useAuth();
 
+  const inFlightFetchRef = React.useRef(false);
+
   const fetchPosts = useCallback(async (status) => {
+    if (inFlightFetchRef.current) return;
+    inFlightFetchRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -96,34 +100,51 @@ export const BlogProvider = ({ children }) => {
       setError(err.message || 'Failed to load posts.');
       setLoading(false);
       return [];
+    } finally {
+      inFlightFetchRef.current = false;
     }
   }, []);
 
-  // Fetch posts initially and when auth state changes
+  // Fetch posts initially on mount
   useEffect(() => {
     fetchPosts();
-  }, [fetchPosts, isAuthenticated]);
+  }, [fetchPosts]);
+
+  const postsRef = React.useRef(posts);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
 
   /**
-   * Get single post by UUID or slug
+   * Get single post by UUID or slug - directly fetches from backend API
    */
-  const getPost = async (idOrSlug) => {
+  const getPost = useCallback(async (idOrSlug) => {
     if (!idOrSlug) return null;
-    // Check cached list first
-    const found = posts.find(
-      (p) => String(p.id) === String(idOrSlug) || String(p.slug) === String(idOrSlug)
-    );
-    if (found) return found;
-
-    // Fetch from backend API
     try {
       const raw = await postsApi.getById(idOrSlug);
-      return normalizePost(raw);
+      const normalized = normalizePost(raw);
+      if (normalized) {
+        setPosts((prev) => {
+          const idx = prev.findIndex(
+            (p) => String(p.id) === String(normalized.id) || String(p.slug) === String(normalized.slug)
+          );
+          if (idx >= 0) {
+            const copy = [...prev];
+            copy[idx] = normalized;
+            return copy;
+          }
+          return [normalized, ...prev];
+        });
+      }
+      return normalized;
     } catch (err) {
-      console.error(`Post not found for id/slug: ${idOrSlug}`, err);
-      return null;
+      console.warn(`postsApi.getById failed for ${idOrSlug}, falling back to cache:`, err);
+      const found = postsRef.current.find(
+        (p) => String(p.id) === String(idOrSlug) || String(p.slug) === String(idOrSlug)
+      );
+      return found || null;
     }
-  };
+  }, []);
 
   /**
    * Add / Create new post via API

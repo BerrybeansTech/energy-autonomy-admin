@@ -73,10 +73,12 @@ function renderTiptapNode(node, index) {
       );
     case 'image': {
       const src = node.attrs?.src;
+      const resolved = getBlogImage(src);
+      if (!resolved) return null;
       return (
         <div key={index} className="my-6 rounded-xl overflow-hidden border border-slate-200">
           <img
-            src={getBlogImage(src)}
+            src={resolved}
             alt={node.attrs?.alt || 'Article visual'}
             className="w-full max-h-[520px] object-cover"
           />
@@ -327,10 +329,10 @@ const BlogViewPage = () => {
         {/* Left: Full Article */}
         <article className="lg:col-span-8 bg-white rounded-xl border border-slate-200/80 overflow-hidden">
           {/* Featured Image */}
-          {post.image && (
+          {Boolean(getBlogImage(post.featuredImage || post.image)) && (
             <div className="relative aspect-[16/9] bg-slate-100 overflow-hidden group">
               <img
-                src={getBlogImage(post.image)}
+                src={getBlogImage(post.featuredImage || post.image)}
                 alt={post.title}
                 className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
               />
@@ -405,7 +407,7 @@ const BlogViewPage = () => {
                   <span className="text-slate-500 font-medium shrink-0">{item.label}</span>
                   <span className={`font-bold truncate text-right ${
                     item.isCategory ? 'text-[#8F3EC9]' :
-                    item.isSlug ? 'text-slate-700 font-mono text-[11px]' :
+                    item.isSlug ? 'text-slate-700 text-xs font-semibold' :
                     item.isStatus ? (post.status === 'published' ? 'text-emerald-600' : 'text-amber-600') :
                     'text-slate-800'
                   } ${item.isSlug ? 'lowercase' : 'capitalize'}`}>

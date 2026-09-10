@@ -37,10 +37,9 @@ const navItems = [
 ];
 
 const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -161,82 +160,62 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
         </nav>
       </div>
 
-      {/* ── Admin User Profile & Dropdown Popup ── */}
-      <div className={`border-t border-slate-200/80 bg-inherit relative ${isSidebarExpanded ? 'p-3' : 'p-2 flex justify-center'}`}>
-        {/* Popup Menu Above */}
-        {isProfileOpen && isSidebarExpanded && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsProfileOpen(false)}
-            />
-            <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-2.5 z-50 animate-scale-in origin-bottom">
-              {/* User Info Header */}
-              <div className="px-3.5 py-2 flex items-center gap-3 border-b border-slate-100">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white flex items-center justify-center font-medium text-sm shrink-0 shadow-2xs">
-                  A
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-slate-900 truncate leading-tight">Admin</p>
-                  <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">admin@gmail.com</p>
-                </div>
+      {/* ── Admin User Profile Docked at Sidebar Bottom ── */}
+      <div className={`border-t border-slate-200 bg-inherit ${isSidebarExpanded ? 'p-3 pb-3.5 space-y-2.5' : 'p-2 flex flex-col items-center gap-2'}`}>
+        {isSidebarExpanded ? (
+          <div className="space-y-2.5">
+            {/* User Info Header */}
+            <div className="flex items-center gap-2.5 px-1 pt-0.5">
+              <div className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white flex items-center justify-center font-medium text-sm shrink-0 shadow-2xs">
+                {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
               </div>
-
-              {/* Menu Actions */}
-              <div className="p-1.5">
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-lg transition-colors cursor-pointer"
-                >
-                  <svg className="w-4 h-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span>Sign out</span>
-                </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-slate-900 truncate leading-tight">
+                  {user?.name || 'Admin'}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate leading-tight mt-0.5">
+                  {user?.email || 'admin@gmail.com'}
+                </p>
               </div>
             </div>
-          </>
-        )}
 
-        {/* Profile Trigger Row */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!isSidebarExpanded) {
-              setIsSidebarExpanded(true);
-              setIsProfileOpen(true);
-            } else {
-              setIsProfileOpen(!isProfileOpen);
-            }
-          }}
-          className={`rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer group ${
-            isSidebarExpanded ? 'w-full flex items-center justify-between p-2' : 'w-10 h-10 flex items-center justify-center p-0'
-          }`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white text-xs font-medium flex items-center justify-center shrink-0 shadow-2xs">
-              A
+            {/* Divider Line */}
+            <div className="border-t border-slate-200" />
+
+            {/* Actions */}
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full h-10 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-lg transition-colors cursor-pointer"
+              >
+                <svg className="w-4 h-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Sign out</span>
+              </button>
             </div>
-            {isSidebarExpanded && (
-              <span className="text-[13px] font-normal text-slate-800 truncate">
-                Admin
-              </span>
-            )}
           </div>
-          {isSidebarExpanded && (
-            <svg
-              className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform duration-200 ${
-                isProfileOpen ? 'rotate-180' : ''
-              }`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-1">
+            <div
+              title={`${user?.name || 'Admin'} (${user?.email || 'admin@gmail.com'})`}
+              className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white text-xs font-medium flex items-center justify-center shrink-0 shadow-2xs cursor-default"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          )}
-        </button>
+              {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sign out"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50/80 transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -55,65 +55,86 @@ export const clearAuth = () => {
   }
 };
 
+const inFlightRequests = new Map();
+
 /**
- * Core HTTP Request Wrapper
+ * Core HTTP Request Wrapper with in-flight GET deduplication
  */
 async function apiRequest(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const token = getAuthToken();
 
-  const headers = {
-    Accept: 'application/json',
-    ...(options.headers || {}),
+  // Deduplicate concurrent identical GET requests
+  const cacheKey = method === 'GET' ? `${url}:${token || ''}` : null;
+  if (cacheKey && inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey);
+  }
+
+  const execute = async () => {
+    const headers = {
+      Accept: 'application/json',
+      ...(options.headers || {}),
+    };
+
+    // Attach Bearer token if present
+    if (token && !headers.Authorization) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    // If body is NOT FormData, set JSON content type
+    if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const config = {
+      ...options,
+      headers,
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      // Handle 401 Unauthorized globally
+      if (response.status === 401) {
+        clearAuth();
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      let data;
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      if (!response.ok) {
+        const errorMessage =
+          (data && typeof data === 'object' && (data.error || data.message)) ||
+          `Request failed with status ${response.status}`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      console.error(`[API Error] ${options.method || 'GET'} ${url}:`, err);
+      throw err;
+    } finally {
+      if (cacheKey) {
+        inFlightRequests.delete(cacheKey);
+      }
+    }
   };
 
-  // Attach Bearer token if present
-  if (token && !headers.Authorization) {
-    headers.Authorization = `Bearer ${token}`;
+  const promise = execute();
+  if (cacheKey) {
+    inFlightRequests.set(cacheKey, promise);
   }
-
-  // If body is NOT FormData, set JSON content type
-  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  const config = {
-    ...options,
-    headers,
-  };
-
-  try {
-    const response = await fetch(url, config);
-
-    // Handle 401 Unauthorized globally
-    if (response.status === 401) {
-      clearAuth();
-      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    let data;
-    if (contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
-
-    if (!response.ok) {
-      const errorMessage =
-        (data && typeof data === 'object' && (data.error || data.message)) ||
-        `Request failed with status ${response.status}`;
-      const error = new Error(errorMessage);
-      error.status = response.status;
-      error.data = data;
-      throw error;
-    }
-
-    return data;
-  } catch (err) {
-    console.error(`[API Error] ${options.method || 'GET'} ${url}:`, err);
-    throw err;
-  }
+  return promise;
 }
 
 /* ==========================================================================

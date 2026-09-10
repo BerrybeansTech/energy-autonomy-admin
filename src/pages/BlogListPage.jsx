@@ -244,13 +244,24 @@ const BlogListPage = () => {
                   {/* Image Thumbnail */}
                   <div
                     onClick={() => navigate(`/blog/view/${post.id}`)}
-                    className="shrink-0 w-16 h-14 sm:w-20 sm:h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer group-hover:opacity-90 transition-opacity"
+                    className="shrink-0 w-16 h-14 sm:w-20 sm:h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer group-hover:opacity-90 transition-opacity flex items-center justify-center"
                   >
-                    <img
-                      src={getBlogImage(post.image)}
-                      alt={post.title}
-                      className="w-full h-full object-cover"
-                    />
+                    {getBlogImage(post.image || post.featuredImage) ? (
+                      <img
+                        src={getBlogImage(post.image || post.featuredImage)}
+                        alt={post.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-50 via-slate-50 to-orange-50 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-[#8F3EC9]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
 
                   {/* Text Content */}
@@ -361,11 +372,19 @@ const BlogListPage = () => {
         itemPreview={
           deleteConfirm && (
             <div className="flex items-center gap-3">
-              <img
-                src={getBlogImage(deleteConfirm.image)}
-                alt={deleteConfirm.title}
-                className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
-              />
+              {getBlogImage(deleteConfirm.image || deleteConfirm.featuredImage) ? (
+                <img
+                  src={getBlogImage(deleteConfirm.image || deleteConfirm.featuredImage)}
+                  alt={deleteConfirm.title}
+                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-[#8F3EC9]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                  </svg>
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-900 truncate">
                   {deleteConfirm.title}

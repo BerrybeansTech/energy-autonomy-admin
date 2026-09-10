@@ -1,34 +1,49 @@
-import blog1 from '@frontend/assets/blog/blog1.png';
-import blog2 from '@frontend/assets/blog/blog2.png';
-import blog3 from '@frontend/assets/blog/blog3.png';
-import blog4 from '@frontend/assets/blog/blog4.png';
-import blogBanner from '@frontend/assets/blog/blog-banner.png';
-import blogDetail from '@frontend/assets/blog/blog-detail.png';
-
-export const BLOG_IMAGES = {
-  blog1: { label: 'Blog Image 1 (Energy)', src: blog1 },
-  blog2: { label: 'Blog Image 2 (Capability)', src: blog2 },
-  blog3: { label: 'Blog Image 3 (Silence & Fear)', src: blog3 },
-  blog4: { label: 'Blog Image 4 (Restoration)', src: blog4 },
-  'blog-banner': { label: 'Blog Banner', src: blogBanner },
-  'blog-detail': { label: 'Blog Detail Featured', src: blogDetail },
-};
-
 const API_BASE = import.meta.env.VITE_API_URL || 'https://energy-autonomy-backend.onrender.com';
 
+export const BLOG_IMAGES = {};
+
+/**
+ * Resolves only real dynamic image URLs from backend API / uploads.
+ * Eliminates all static dummy/mock images so only dynamic data is displayed.
+ */
 export const getBlogImage = (key) => {
-  if (!key) return blog1;
-  if (typeof key === 'string') {
-    if (key.startsWith('data:') || key.startsWith('http://') || key.startsWith('https://') || key.startsWith('blob:')) {
-      return key;
-    }
-    if (key.startsWith('/uploads/') || key.startsWith('uploads/')) {
-      const cleanPath = key.startsWith('/') ? key : `/${key}`;
-      return `${API_BASE}${cleanPath}`;
-    }
-    if (key.startsWith('/')) {
-      return key;
-    }
+  if (!key || typeof key !== 'string') return null;
+
+  const trimmed = key.trim();
+  if (!trimmed) return null;
+
+  // Ignore dummy/static mock keys like "blog1", "blog2", "blog-banner", etc.
+  if (
+    trimmed === 'blog1' ||
+    trimmed === 'blog2' ||
+    trimmed === 'blog3' ||
+    trimmed === 'blog4' ||
+    trimmed === 'blog-banner' ||
+    trimmed === 'blog-detail' ||
+    (trimmed.toLowerCase().startsWith('blog') && !trimmed.includes('/') && !trimmed.includes('.'))
+  ) {
+    return null;
   }
-  return BLOG_IMAGES[key]?.src || BLOG_IMAGES[key?.toLowerCase()]?.src || blog1;
+
+  // Full URLs (Render uploads, external or blob)
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  ) {
+    return trimmed;
+  }
+
+  // Backend upload paths
+  if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/')) {
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return `${API_BASE}${cleanPath}`;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return `${API_BASE}${trimmed}`;
+  }
+
+  return null;
 };
