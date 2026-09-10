@@ -8,6 +8,7 @@ import Image from '@tiptap/extension-image'
 import Youtube from '@tiptap/extension-youtube'
 import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
+import { uploadApi } from '../services/api'
 
 import {
   Bold,
@@ -41,7 +42,7 @@ const COLOR_PRESETS = [
   { name: 'Deep Gray', color: '#6b7280' },
 ]
 
-const MediumEditor = ({ onJsonUpdate, initialContent }) => {
+const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [customColor, setCustomColor] = useState('#1a8917')
   const [showLinkModal, setShowLinkModal] = useState(false)
@@ -61,6 +62,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
 
   // Floating Plus Menu Expanded state
   const [plusOpen, setPlusOpen] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   const containerRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -122,6 +124,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
   }
 
   const editor = useEditor({
+    editable: Boolean(editable),
     extensions: [
       StarterKit.configure({
         heading: {
@@ -206,6 +209,12 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
     }
   }, [editor, initialContent])
 
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(Boolean(editable))
+    }
+  }, [editor, editable])
+
   if (!editor) return null
 
   // Word Color Helper
@@ -239,19 +248,25 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
     }
   }
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const src = event.target?.result
-        if (src) {
-          editor.chain().focus().setImage({ src: String(src) }).run()
+      setUploadingImage(true)
+      try {
+        const res = await uploadApi.upload(file)
+        const fileUrl = res.file?.url || res.file?.path
+        if (fileUrl) {
+          editor.chain().focus().setImage({ src: fileUrl }).run()
         }
+      } catch (err) {
+        console.error('Failed to upload image:', err)
+        alert('Image upload failed: ' + (err.message || 'Server error'))
+      } finally {
+        setUploadingImage(false)
+        setShowImageModal(false)
+        setPlusOpen(false)
+        if (e.target) e.target.value = ''
       }
-      reader.readAsDataURL(file)
-      setShowImageModal(false)
-      setPlusOpen(false)
     }
   }
 
@@ -286,7 +301,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
       {/* ------------------------------------------------------------- */}
       {/* SELECTION BUBBLE TOOLBAR                                      */}
       {/* ------------------------------------------------------------- */}
-      {bubblePosition.show && (
+      {editable && bubblePosition.show && (
         <div
           style={{
             top: `${bubblePosition.top}px`,
@@ -454,7 +469,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
       {/* ------------------------------------------------------------- */}
       {/* FLOATING ROUNDED PLUS (+) ICON WITH LIST & NUMBERING OPTIONS   */}
       {/* ------------------------------------------------------------- */}
-      {plusPosition.show && (
+      {editable && plusPosition.show && (
         <div
           style={{ top: `${plusPosition.top}px` }}
           className="absolute -left-10 z-30 flex items-center space-x-2 transition-all duration-150"
@@ -600,14 +615,24 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Upload Local File</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  ref={fileInputRef}
-                  className="block w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
-                />
+                <label className="block text-xs font-medium text-zinc-600 mb-1">Upload Local File to Server</label>
+                {uploadingImage ? (
+                  <div className="flex items-center space-x-2 text-xs text-[#8F3EC9] font-medium py-2">
+                    <svg className="w-4 h-4 animate-spin text-[#8F3EC9]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span>Uploading image to server...</span>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    ref={fileInputRef}
+                    className="block w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-[#8F3EC9] hover:file:bg-purple-100 cursor-pointer"
+                  />
+                )}
               </div>
 
               <div className="relative flex py-1 items-center">

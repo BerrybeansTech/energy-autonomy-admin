@@ -1,19 +1,165 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useBlog } from '../context/BlogContext';
 import { getBlogImage } from '../data/imageAssets';
 import { ConfirmationModal } from '../components/common';
+import { uploadApi } from '../services/api';
+
+/**
+ * Clean recursive renderer for Tiptap JSON content
+ */
+function renderTiptapNode(node, index) {
+  if (!node) return null;
+  if (typeof node === 'string') return node;
+
+  switch (node.type) {
+    case 'doc':
+      return (
+        <div key={index} className="space-y-4">
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </div>
+      );
+    case 'heading': {
+      const level = node.attrs?.level || 2;
+      const HeadingTag = `h${level}`;
+      const sizeClass =
+        level === 1
+          ? 'text-2xl sm:text-3xl font-bold text-slate-900 mt-6 mb-3 font-lora leading-tight'
+          : level === 2
+          ? 'text-xl sm:text-2xl font-bold text-slate-900 mt-5 mb-2.5 font-lora leading-tight'
+          : 'text-lg sm:text-xl font-bold text-slate-900 mt-4 mb-2 font-lora leading-tight';
+      return (
+        <HeadingTag key={index} className={sizeClass}>
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </HeadingTag>
+      );
+    }
+    case 'paragraph': {
+      if (!node.content || node.content.length === 0) {
+        return <p key={index} className="h-3" />;
+      }
+      return (
+        <p key={index} className="text-sm sm:text-base text-slate-700 leading-[1.8]">
+          {node.content.map((child, i) => renderTiptapNode(child, i))}
+        </p>
+      );
+    }
+    case 'blockquote':
+      return (
+        <blockquote
+          key={index}
+          className="border-l-4 border-[#8F3EC9] pl-4 py-2 my-4 italic text-slate-700 bg-purple-50/40 rounded-r-lg"
+        >
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </blockquote>
+      );
+    case 'bulletList':
+      return (
+        <ul key={index} className="list-disc list-inside space-y-1.5 my-3 pl-2 text-slate-700 text-sm sm:text-base">
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </ul>
+      );
+    case 'orderedList':
+      return (
+        <ol key={index} className="list-decimal list-inside space-y-1.5 my-3 pl-2 text-slate-700 text-sm sm:text-base">
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </ol>
+      );
+    case 'listItem':
+      return (
+        <li key={index} className="leading-relaxed">
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </li>
+      );
+    case 'image': {
+      const src = node.attrs?.src;
+      return (
+        <div key={index} className="my-6 rounded-xl overflow-hidden border border-slate-200">
+          <img
+            src={getBlogImage(src)}
+            alt={node.attrs?.alt || 'Article visual'}
+            className="w-full max-h-[520px] object-cover"
+          />
+        </div>
+      );
+    }
+    case 'horizontalRule':
+      return <hr key={index} className="my-6 border-slate-200" />;
+    case 'text': {
+      let content = node.text;
+      if (node.marks) {
+        node.marks.forEach((mark) => {
+          if (mark.type === 'bold') {
+            content = <strong key="b" className="font-bold text-slate-900">{content}</strong>;
+          } else if (mark.type === 'italic') {
+            content = <em key="i" className="italic">{content}</em>;
+          } else if (mark.type === 'link') {
+            content = (
+              <a
+                key="link"
+                href={mark.attrs?.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[#8F3EC9] hover:underline font-medium"
+              >
+                {content}
+              </a>
+            );
+          } else if (mark.type === 'textStyle' && mark.attrs?.color) {
+            content = <span key="color" style={{ color: mark.attrs.color }}>{content}</span>;
+          } else if (mark.type === 'highlight') {
+            content = <mark key="mark" className="bg-yellow-100 px-1 rounded">{content}</mark>;
+          }
+        });
+      }
+      return <React.Fragment key={index}>{content}</React.Fragment>;
+    }
+    default:
+      return (
+        <div key={index}>
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </div>
+      );
+  }
+}
 
 const BlogViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getPost, deletePost, updatePost } = useBlog();
-  const post = getPost(id);
+  const { getPost, deletePost, updateStatus } = useBlog();
+
+  const [post, setPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // Asynchronously fetch post by ID or Slug
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const found = await getPost(id);
+        if (isMounted) {
+          setPost(found);
+        }
+      } catch (err) {
+        console.error('Failed to load post:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    if (id) {
+      load();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [id, getPost]);
+
   // Track scroll on window and main container for sticky glass navbar
-  React.useEffect(() => {
+  useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
       const scrollable = document.querySelector('main') || document.querySelector('.overflow-y-auto');
@@ -35,6 +181,52 @@ const BlogViewPage = () => {
     };
   }, []);
 
+  const toggleStatus = async () => {
+    if (!post || statusLoading) return;
+    const nextStatus = post.status === 'published' ? 'draft' : 'published';
+    setStatusLoading(true);
+    try {
+      const updated = await updateStatus(post.id, nextStatus);
+      if (updated) {
+        setPost(updated);
+      }
+    } catch (err) {
+      console.error('Failed to toggle post status:', err);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!post) return;
+    try {
+      await deletePost(post.id);
+      const img = post.featuredImage || post.image;
+      if (img && (img.includes('/uploads/') || img.includes('cover-'))) {
+        const fname = img.split('/').pop().split('\\').pop();
+        await uploadApi.delete(fname).catch(() => {});
+      }
+      navigate('/blog');
+    } catch (err) {
+      console.error('Failed to delete post:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto p-12 space-y-6 animate-pulse">
+        <div className="h-8 bg-slate-200 rounded-lg w-1/3" />
+        <div className="h-72 bg-slate-200 rounded-2xl w-full" />
+        <div className="h-6 bg-slate-200 rounded w-2/3" />
+        <div className="space-y-3 pt-4">
+          <div className="h-4 bg-slate-200 rounded w-full" />
+          <div className="h-4 bg-slate-200 rounded w-5/6" />
+          <div className="h-4 bg-slate-200 rounded w-4/6" />
+        </div>
+      </div>
+    );
+  }
+
   if (!post) {
     return (
       <div className="p-16 max-w-xl mx-auto text-center space-y-5 animate-fade-in-up">
@@ -45,7 +237,7 @@ const BlogViewPage = () => {
           </svg>
         </div>
         <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Post Not Found</h2>
-        <p className="text-sm text-slate-500 max-w-sm mx-auto">The requested article could not be located in the library.</p>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">The requested article could not be located in the database.</p>
         <Link
           to="/blog"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#8F3EC9] text-white rounded-lg text-xs font-bold hover:bg-[#7B2EB3] transition-colors shadow-sm"
@@ -59,23 +251,11 @@ const BlogViewPage = () => {
     );
   }
 
-  const tags = Array.isArray(post.tags)
-    ? post.tags
-    : (post.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
-
-  const toggleStatus = () => {
-    const nextStatus = post.status === 'published' ? 'draft' : 'published';
-    updatePost(post.id, { ...post, status: nextStatus });
-  };
-
-  const handleDelete = () => {
-    deletePost(post.id);
-    navigate('/blog');
-  };
+  const hasRichContent = post.contentJson && typeof post.contentJson === 'object' && post.contentJson.type === 'doc';
 
   return (
     <div className="space-y-5 relative">
-      {/* ── Sticky Top Navbar (Same #FAFBFC color with glass blur, never turning white) ── */}
+      {/* ── Sticky Top Navbar ── */}
       <div
         className={`sticky top-0 z-30 transition-all duration-150 -mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-4 border-b border-slate-200/80 bg-[#FAFBFC]/85 backdrop-blur-md ${
           isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.03)]' : ''
@@ -112,13 +292,14 @@ const BlogViewPage = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={toggleStatus}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-white shadow-2xs cursor-pointer ${
+              disabled={statusLoading}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-white shadow-2xs cursor-pointer disabled:opacity-60 ${
                 post.status === 'published'
                   ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
                   : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
               }`}
             >
-              {post.status === 'published' ? 'Move to Draft' : 'Publish Article'}
+              {statusLoading ? 'Updating...' : post.status === 'published' ? 'Move to Draft' : 'Publish Article'}
             </button>
 
             <Link
@@ -145,27 +326,29 @@ const BlogViewPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Left: Full Article */}
         <article className="lg:col-span-8 bg-white rounded-xl border border-slate-200/80 overflow-hidden">
-          {/* Featured Image (No overlay badge) */}
-          <div className="relative aspect-[16/9] bg-slate-100 overflow-hidden group">
-            <img
-              src={getBlogImage(post.image)}
-              alt={post.title}
-              className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-            <div className="absolute top-3.5 left-3.5">
-              <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-xs">
-                {post.category}
-              </span>
+          {/* Featured Image */}
+          {post.image && (
+            <div className="relative aspect-[16/9] bg-slate-100 overflow-hidden group">
+              <img
+                src={getBlogImage(post.image)}
+                alt={post.title}
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+              <div className="absolute top-3.5 left-3.5">
+                <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-xs">
+                  {post.category || 'General'}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="p-5 sm:p-8 space-y-5">
-            {/* Meta Line: Only Updated at and min read (Avatar and author removed) */}
+            {/* Meta Line */}
             <div className="flex items-center gap-2 text-xs text-slate-400 pb-3 border-b border-slate-100">
               <span>Updated {post.publishedAt || 'recently'}</span>
               <span>•</span>
-              <span>{post.readTime || '1 min read'}</span>
+              <span>{post.readTime || post.readingTime || '1 min read'}</span>
             </div>
 
             {/* Title */}
@@ -183,20 +366,25 @@ const BlogViewPage = () => {
               </div>
             )}
 
-            {/* Body Content */}
-            <div className="space-y-3.5 text-sm text-slate-700 leading-[1.8] pt-1">
-              {(post.content || '').split('\n\n').filter(Boolean).map((paragraph, index) => (
-                <p key={index} className="leading-[1.8]">
-                  {paragraph}
-                </p>
-              ))}
+            {/* Rich Body Content */}
+            <div className="pt-2">
+              {hasRichContent ? (
+                renderTiptapNode(post.contentJson, 0)
+              ) : (
+                <div className="space-y-3.5 text-sm text-slate-700 leading-[1.8]">
+                  {(post.content || '').split('\n\n').filter(Boolean).map((paragraph, index) => (
+                    <p key={index} className="leading-[1.8]">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </article>
 
         {/* Right: Sticky Sidebar (Clean Article Properties) */}
         <aside className="lg:col-span-4 space-y-5 sticky top-[72px] self-start">
-          {/* Metadata Card (Author and image ref removed) */}
           <div className="p-5 bg-white rounded-xl border border-slate-200/80 space-y-3">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -208,17 +396,19 @@ const BlogViewPage = () => {
             <div className="space-y-0 text-xs">
               {[
                 { label: 'Live Status', value: post.status, isStatus: true },
-                { label: 'Category', value: post.category, isCategory: true },
-                { label: 'Published', value: post.publishedAt },
-                { label: 'Read Time', value: post.readTime },
+                { label: 'URL Slug', value: post.slug || '—', isSlug: true },
+                { label: 'Category', value: post.category || 'General', isCategory: true },
+                { label: 'Published Date', value: post.publishedAt || 'Not published yet' },
+                { label: 'Read Time', value: post.readTime || post.readingTime || '1 min read' },
               ].map((item, i) => (
-                <div key={i} className="flex justify-between py-2.5 border-b border-slate-50 last:border-0">
-                  <span className="text-slate-500 font-medium">{item.label}</span>
-                  <span className={`font-bold ${
+                <div key={i} className="flex justify-between py-2.5 border-b border-slate-50 last:border-0 items-center gap-2">
+                  <span className="text-slate-500 font-medium shrink-0">{item.label}</span>
+                  <span className={`font-bold truncate text-right ${
                     item.isCategory ? 'text-[#8F3EC9]' :
+                    item.isSlug ? 'text-slate-700 font-mono text-[11px]' :
                     item.isStatus ? (post.status === 'published' ? 'text-emerald-600' : 'text-amber-600') :
                     'text-slate-800'
-                  } capitalize`}>
+                  } ${item.isSlug ? 'lowercase' : 'capitalize'}`}>
                     {item.value}
                   </span>
                 </div>

@@ -14,10 +14,21 @@ export const BLOG_IMAGES = {
   'blog-detail': { label: 'Blog Detail Featured', src: blogDetail },
 };
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://energy-autonomy-backend.onrender.com';
+
 export const getBlogImage = (key) => {
   if (!key) return blog1;
-  if (typeof key === 'string' && (key.startsWith('data:') || key.startsWith('http') || key.startsWith('blob:') || key.startsWith('/'))) {
-    return key;
+  if (typeof key === 'string') {
+    if (key.startsWith('data:') || key.startsWith('http://') || key.startsWith('https://') || key.startsWith('blob:')) {
+      return key;
+    }
+    if (key.startsWith('/uploads/') || key.startsWith('uploads/')) {
+      const cleanPath = key.startsWith('/') ? key : `/${key}`;
+      return `${API_BASE}${cleanPath}`;
+    }
+    if (key.startsWith('/')) {
+      return key;
+    }
   }
-  return BLOG_IMAGES[key]?.src || BLOG_IMAGES[key.toLowerCase()]?.src || blog1;
+  return BLOG_IMAGES[key]?.src || BLOG_IMAGES[key?.toLowerCase()]?.src || blog1;
 };

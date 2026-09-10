@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useBlog } from '../context/BlogContext';
 import { getBlogImage } from '../data/imageAssets';
 import { ConfirmationModal } from '../components/common';
+import { uploadApi } from '../services/api';
 
 const BlogListPage = () => {
-  const { posts, deletePost } = useBlog();
+  const { posts, deletePost, loading } = useBlog();
   const navigate = useNavigate();
 
   // Active Tab: 'published' as first, 'draft' as second
@@ -60,7 +61,8 @@ const BlogListPage = () => {
   };
 
   const handleCopyLink = (post) => {
-    const url = `${window.location.origin}/blog/view/${post.id}`;
+    const urlSlug = post.slug ? post.slug : post.id;
+    const url = `${window.location.origin}/blog/view/${urlSlug}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
     }
@@ -73,11 +75,24 @@ const BlogListPage = () => {
     navigate(`/blog/edit/${post.id}`);
   };
 
-  const handleDeleteBlog = (id) => {
-    deletePost(id);
-    setDeleteConfirm(null);
-    setOpenMenuId(null);
-    showToast('Blog deleted successfully');
+  const handleDeleteBlog = async (target) => {
+    if (!target) return;
+    const postId = typeof target === 'object' ? target.id : target;
+    const postImg = typeof target === 'object' ? target.image || target.featuredImage : null;
+
+    try {
+      await deletePost(postId);
+      // Clean up uploaded image on backend if applicable
+      if (postImg && (postImg.includes('/uploads/') || postImg.includes('cover-'))) {
+        const filename = postImg.split('/').pop().split('\\').pop();
+        await uploadApi.delete(filename).catch(() => {});
+      }
+      setDeleteConfirm(null);
+      setOpenMenuId(null);
+      showToast('Blog deleted successfully');
+    } catch (err) {
+      showToast('Failed to delete: ' + (err.message || 'Error'));
+    }
   };
 
   // Format relative or standard updated time
@@ -187,7 +202,20 @@ const BlogListPage = () => {
 
       {/* ── Stories List ── */}
       <div className="divide-y divide-slate-200/60">
-        {displayedPosts.length === 0 ? (
+        {loading ? (
+          <div className="py-8 space-y-4">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="py-4 px-3 flex items-center gap-4 animate-pulse">
+                <div className="w-16 h-14 rounded-lg bg-slate-200 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-200 rounded w-1/3" />
+                  <div className="h-3 bg-slate-200 rounded w-2/3" />
+                  <div className="h-2 bg-slate-200 rounded w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : displayedPosts.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
             <p className="text-sm font-medium">
               {search
@@ -324,7 +352,7 @@ const BlogListPage = () => {
       <ConfirmationModal
         isOpen={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => handleDeleteBlog(deleteConfirm.id)}
+        onConfirm={() => handleDeleteBlog(deleteConfirm)}
         title="Delete blog?"
         message="Are you sure you want to delete this blog? This action cannot be undone."
         confirmText="Delete"

@@ -26,16 +26,21 @@ const BlogFormPage = ({ mode = 'create' }) => {
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (mode === 'edit' && id) {
-      const post = getPost(id);
-      if (post) {
-        setForm({
-          ...post,
-          tags: Array.isArray(post.tags) ? post.tags.join(', ') : post.tags || '',
-        });
-      }
+    let isMounted = true;
+    if (mode === 'edit' && id && getPost) {
+      getPost(id).then((post) => {
+        if (isMounted && post) {
+          setForm({
+            ...post,
+            tags: Array.isArray(post.tags) ? post.tags.join(', ') : post.tags || '',
+          });
+        }
+      });
     }
-  }, [mode, id]);
+    return () => {
+      isMounted = false;
+    };
+  }, [mode, id, getPost]);
 
   const generateSlug = (text) => {
     return text
@@ -58,33 +63,38 @@ const BlogFormPage = ({ mode = 'create' }) => {
   const validate = () => {
     const errs = {};
     if (!form.title.trim()) errs.title = 'Article title is required.';
+    if (!form.slug.trim()) errs.slug = 'URL slug is required.';
     if (!form.excerpt.trim()) errs.excerpt = 'Excerpt is required.';
-    if (!form.content.trim()) errs.content = 'Post body content is required.';
+    if (!form.content.trim()) errs.content = 'Content is required.';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     const payload = {
       ...form,
-      slug: form.slug || generateSlug(form.title),
       tags: form.tags
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean),
     };
 
-    if (mode === 'create') {
-      addPost(payload);
-    } else {
-      updatePost(Number(id), payload);
-    }
+    try {
+      if (mode === 'create') {
+        await addPost(payload);
+      } else {
+        await updatePost(id, payload);
+      }
 
-    setSaved(true);
-    setTimeout(() => navigate('/blog'), 900);
+      setSaved(true);
+      setTimeout(() => navigate('/blog'), 900);
+    } catch (err) {
+      console.error('Failed to save post:', err);
+      setErrors((prev) => ({ ...prev, submit: err.message || 'Failed to save.' }));
+    }
   };
 
   const insertFormatting = (prefix, suffix = '') => {

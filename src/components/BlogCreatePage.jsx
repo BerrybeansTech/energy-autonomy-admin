@@ -3,6 +3,8 @@ import { Link, useNavigate, useLocation, useParams } from 'react-router-dom'
 import MediumEditor from './MediumEditor'
 import { useBlog } from '../context/BlogContext'
 import { useAuth } from '../context/AuthContext'
+import { uploadApi } from '../services/api'
+import { categories } from '../data/blogData'
 import {
   Eye,
   Edit3,
@@ -17,8 +19,24 @@ import {
   PenSquare,
   Type,
   ArrowLeft,
-  ChevronUp
+  ChevronUp,
+  Link as LinkIcon,
+  RotateCcw,
+  AlertCircle
 } from 'lucide-react'
+
+/**
+ * URL-friendly slug generator
+ */
+export function generateSlug(text) {
+  if (!text) return ''
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[\s\W-]+/g, '-') // Replace spaces and special characters with hyphen
+    .replace(/^-+|-+$/g, '')   // Trim leading/trailing hyphens
+}
 
 const BlogCreatePage = ({ onBackToDashboard }) => {
   const { logout } = useAuth() || {}
@@ -31,13 +49,19 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const location = useLocation()
 
   const [title, setTitle] = useState('')
+  const [slug, setSlug] = useState('')
+  const [isSlugEdited, setIsSlugEdited] = useState(false)
+  const [status, setStatus] = useState('published')
   const [subtitle, setSubtitle] = useState('')
   const [showSubtitleInput, setShowSubtitleInput] = useState(false)
   const [coverImage, setCoverImage] = useState('')
+  const [coverFilename, setCoverFilename] = useState('')
+  const [uploadingCover, setUploadingCover] = useState(false)
   const [showCoverInput, setShowCoverInput] = useState(false)
-  const [tags, setTags] = useState(['Energy Autonomy', 'Sustainability', 'Green Tech'])
-  const [newTagInput, setNewTagInput] = useState('')
+  const [tags, setTags] = useState(['ENERGY & AWARENESS'])
+  const [isPublishing, setIsPublishing] = useState(false)
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
 
@@ -51,7 +75,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       titleTextareaRef.current.style.height = titleTextareaRef.current.scrollHeight + 'px'
     }
   }, [title])
-
 
   // Auto-resize subtitle textarea to fit multiline content
   useEffect(() => {
@@ -74,54 +97,68 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
   // Load existing post if editing
   useEffect(() => {
+    let isMounted = true
     if (id && getPost) {
-      const existing = getPost(id)
-      if (existing) {
+      getPost(id).then((existing) => {
+        if (!isMounted || !existing) return
         setTitle(existing.title || '')
-        if (existing.excerpt) {
-          setSubtitle(existing.excerpt)
+        if (existing.slug) {
+          setSlug(existing.slug)
+          setIsSlugEdited(true)
+        }
+        if (existing.status) {
+          setStatus(existing.status)
+        }
+        if (existing.excerpt || existing.seo_description) {
+          setSubtitle(existing.excerpt || existing.seo_description)
           setShowSubtitleInput(true)
         }
-        if (existing.image) {
-          setCoverImage(existing.image)
+        if (existing.featured_image || existing.image) {
+          const imgUrl = existing.featured_image || existing.image
+          setCoverImage(imgUrl)
+          const fname = imgUrl.split('/').pop().split('\\').pop()
+          setCoverFilename(fname)
         }
-        if (existing.tags) {
-          setTags(Array.isArray(existing.tags) ? existing.tags : existing.tags.split(',').map(s => s.trim()).filter(Boolean))
+        if (existing.category || existing.category_name) {
+          setTags([existing.category || existing.category_name])
         }
-        if (existing.content) {
+        const content = existing.content_json || existing.contentJson
+        if (content && typeof content === 'object' && content.type === 'doc') {
+          setEditorJson(content)
+        } else if (content) {
           try {
-            const parsed = typeof existing.content === 'string' ? JSON.parse(existing.content) : existing.content
+            const parsed = typeof content === 'string' ? JSON.parse(content) : content
             if (parsed && (parsed.type === 'doc' || parsed.content)) {
               setEditorJson(parsed)
-            } else {
-              setEditorJson({
-                type: 'doc',
-                content: String(existing.content).split('\n\n').filter(Boolean).map(text => ({
-                  type: 'paragraph',
-                  content: [{ type: 'text', text }]
-                }))
-              })
             }
-          } catch (err) {
-            setEditorJson({
-              type: 'doc',
-              content: String(existing.content).split('\n\n').filter(Boolean).map(text => ({
-                type: 'paragraph',
-                content: [{ type: 'text', text }]
-              }))
-            })
-          }
+          } catch {}
         }
-      }
+      })
+    }
+    return () => {
+      isMounted = false
     }
   }, [id, getPost])
+
+  // Title change handler with automatic title-based URL slug generation
+  const handleTitleChange = (e) => {
+    const val = e.target.value
+    setTitle(val)
+    if (!isSlugEdited) {
+      setSlug(generateSlug(val))
+    }
+    if (errorMessage) setErrorMessage('')
+  }
 
   // Calculate word count & reading time
   const { wordCount, readingTime } = useMemo(() => {
     let text = title + ' ' + subtitle + ' '
     const extractText = (node) => {
+      if (!node) return
       if (node.text) text += node.text + ' '
-      if (node.content) node.content.forEach(extractText)
+      if (node.content && Array.isArray(node.content)) {
+        node.content.forEach(extractText)
+      }
     }
     if (editorJson && editorJson.content) {
       editorJson.content.forEach(extractText)
@@ -131,48 +168,95 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     return { wordCount: words, readingTime: minutes }
   }, [title, subtitle, editorJson])
 
-  // Cover Image upload
-  const handleCoverUpload = (e) => {
+  // Cover Image upload via backend /api/upload
+  const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setCoverImage(String(event.target.result))
+      setUploadingCover(true)
+      setErrorMessage('')
+      try {
+        const res = await uploadApi.upload(file)
+        const fileUrl = res.file?.url || res.file?.path
+        const filename = res.file?.filename
+        if (fileUrl) {
+          setCoverImage(fileUrl)
+          setCoverFilename(filename || fileUrl.split('/').pop().split('\\').pop())
+          setShowCoverInput(false)
         }
+      } catch (err) {
+        console.error('Failed to upload cover image:', err)
+        setErrorMessage('Cover image upload failed: ' + (err.message || 'Server error'))
+      } finally {
+        setUploadingCover(false)
+        if (e.target) e.target.value = ''
       }
-      reader.readAsDataURL(file)
     }
   }
 
-  // Publish / Update Handler
-  const handlePublish = () => {
-    const postPayload = {
-      title: title || 'Untitled Story',
-      excerpt: subtitle || 'No excerpt provided.',
-      content: JSON.stringify(editorJson),
-      category: tags[0] || 'General',
-      status: 'published',
-      author: 'Admin',
-      readTime: `${readingTime} min read`,
-      tags: tags,
-      image: coverImage || 'blog1',
+  // Cover Image remove with backend /api/upload/:filename deletion
+  const handleRemoveCoverImage = async () => {
+    if (coverFilename || (coverImage && coverImage.includes('/uploads/'))) {
+      const filename = coverFilename || coverImage.split('/').pop().split('\\').pop()
+      try {
+        await uploadApi.delete(filename)
+      } catch (err) {
+        console.warn('Failed to delete cover image on backend:', err)
+      }
+    }
+    setCoverImage('')
+    setCoverFilename('')
+  }
+
+  // Publish / Update Handler using REST API
+  const handlePublish = async () => {
+    if (!title.trim()) {
+      setErrorMessage('Please enter a title for your blog post.')
+      return
     }
 
-    if (id && updatePost) {
-      updatePost(id, postPayload)
-    } else if (addPost) {
-      addPost(postPayload)
+    const cleanTitle = title.trim()
+    const autoSlug = generateSlug(cleanTitle)
+    const finalSlug = (slug && slug.trim()) ? generateSlug(slug) : (autoSlug || `post-${Date.now()}`)
+
+    setErrorMessage('')
+    setIsPublishing(true)
+
+    const postPayload = {
+      title: cleanTitle,
+      slug: finalSlug,
+      contentJson: editorJson,
+      featuredImage: coverImage || null,
+      categoryName: tags[0] || 'ENERGY & AWARENESS',
+      status: status || 'published',
+      seoTitle: cleanTitle,
+      seoDescription: subtitle ? subtitle.trim() : (cleanTitle ? `${cleanTitle} - Energy Autonomy` : ''),
     }
-    setIsPublishSuccess(true)
-    setTimeout(() => {
-      setIsPublishSuccess(false)
-      if (onBackToDashboard) {
-        onBackToDashboard()
-      } else {
-        navigate('/blog')
+
+    try {
+      if (id && updatePost) {
+        await updatePost(id, postPayload)
+      } else if (addPost) {
+        await addPost(postPayload)
       }
-    }, 1500)
+      setIsPublishSuccess(true)
+      setTimeout(() => {
+        setIsPublishSuccess(false)
+        if (onBackToDashboard) {
+          onBackToDashboard()
+        } else {
+          navigate('/blog')
+        }
+      }, 1200)
+    } catch (err) {
+      console.error('Failed to save post:', err)
+      let msg = err.data?.error || err.message || 'Failed to save blog post.'
+      if (msg.toLowerCase().includes('duplicate slug')) {
+        msg = `A post with the URL slug "${finalSlug}" already exists. Please modify the URL slug below.`
+      }
+      setErrorMessage(msg)
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   return (
@@ -219,7 +303,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               </button>
             </>
           ) : (
-            /* When Collapsed: No logo/app name, ONLY show the Open Sidebar Icon button */
             <button
               type="button"
               onClick={(e) => {
@@ -291,7 +374,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             )}
           </div>
 
-          {/* Write New Blog (Active - Stays on page) */}
+          {/* Write New Blog (Active) */}
           <div className="relative group flex justify-center">
             <div
               className={`transition-all duration-200 cursor-default ${
@@ -319,7 +402,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
         {/* Sidebar Footer */}
         <div className={`border-t border-slate-100 relative ${isSidebarExpanded ? 'p-3' : 'p-2 flex justify-center'}`}>
-          {/* Popup Menu Above */}
           {isProfileOpen && isSidebarExpanded && (
             <>
               <div
@@ -327,18 +409,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 onClick={() => setIsProfileOpen(false)}
               />
               <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-2.5 z-50 animate-scale-in origin-bottom">
-                {/* User Info Header */}
-                <div className="px-3.5 py-2 flex items-center gap-3 border-b border-slate-100">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#8F3EC9] via-[#A06BC6] to-[#FE9B40] text-white flex items-center justify-center font-medium text-sm shrink-0 shadow-2xs">
-                    A
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-slate-900 truncate leading-tight">Admin</p>
-                    <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">admin@gmail.com</p>
-                  </div>
-                </div>
-
-                {/* Menu Actions */}
                 <div className="p-1.5 space-y-0.5">
                   <button
                     type="button"
@@ -373,7 +443,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             </>
           )}
 
-          {/* Profile Trigger Row */}
           <button
             type="button"
             onClick={() => {
@@ -420,10 +489,46 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       <div className={`flex-1 flex flex-col min-h-screen bg-white transition-all duration-300 ease-in-out ${
         isSidebarExpanded ? 'pl-[240px]' : 'pl-[64px]'
       }`}>
-        {/* Top Action Bar (Clean right-aligned controls, Back button removed) */}
-        <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 py-4 flex items-center justify-end">
+        {/* Top Action Bar */}
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 py-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              if (onBackToDashboard) onBackToDashboard()
+              else navigate('/blog')
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Blogs</span>
+          </button>
+
           {/* Right Action Controls */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
+            {/* Category Select */}
+            <select
+              value={tags[0] || 'ENERGY & AWARENESS'}
+              onChange={(e) => setTags([e.target.value])}
+              className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#8F3EC9] cursor-pointer max-w-[160px] truncate"
+              title="Select Category"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Select */}
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="text-xs font-semibold px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-[#8F3EC9] cursor-pointer"
+            >
+              <option value="published">🟢 Published</option>
+              <option value="draft">🟡 Draft</option>
+            </select>
+
             {/* Preview Toggle */}
             <button
               onClick={() => setIsPreviewMode(!isPreviewMode)}
@@ -449,13 +554,39 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {/* Publish / Save Primary Button */}
             <button
               onClick={handlePublish}
-              className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
+              disabled={isPublishing}
+              className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>{id ? 'Save Changes' : 'Publish'}</span>
+              {isPublishing ? (
+                <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <Send className="w-3.5 h-3.5" />
+              )}
+              <span>{isPublishing ? 'Saving...' : id ? 'Save Changes' : 'Publish Article'}</span>
             </button>
           </div>
         </div>
+
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 mb-3">
+            <div className="flex items-center justify-between gap-2.5 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                onClick={() => setErrorMessage('')}
+                className="text-red-400 hover:text-red-700 text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Publish / Update Toast Alert */}
         {isPublishSuccess && (
@@ -463,13 +594,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             <div>
               <p className="text-xs font-semibold">{id ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
-              <p className="text-[11px] text-zinc-400">{id ? 'Changes have been saved successfully' : 'Post saved and added to blog list'}</p>
+              <p className="text-[11px] text-zinc-400">{id ? 'Changes saved to database' : 'Article created and published via API'}</p>
             </div>
           </div>
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* CANVAS MAIN BODY (Increased Width to max-w-5xl)               */}
+        {/* CANVAS MAIN BODY                                              */}
         {/* ------------------------------------------------------------- */}
         <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-8 md:px-12 pb-24">
         {!isPreviewMode ? (
@@ -506,9 +637,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 <div className="relative w-full h-80 rounded-2xl overflow-hidden border border-zinc-200 group">
                   <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
                   <button
-                    onClick={() => setCoverImage('')}
+                    onClick={handleRemoveCoverImage}
                     className="absolute top-3 right-3 bg-black/60 hover:bg-black text-white p-1.5 rounded-full transition-colors cursor-pointer"
-                    title="Remove Cover Image"
+                    title="Remove Cover Image from Server"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -517,7 +648,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 showCoverInput && (
                   <div className="p-4 bg-zinc-50 rounded-xl border border-dashed border-zinc-300 space-y-3">
                     <div className="flex items-center justify-between text-xs font-medium text-zinc-600">
-                      <span>Upload or select cover image</span>
+                      <span>Upload cover image to server</span>
                       <button
                         onClick={() => setShowCoverInput(false)}
                         className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
@@ -526,41 +657,85 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                       </button>
                     </div>
 
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCoverUpload}
-                        className="text-xs text-zinc-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-                      />
-                    </div>
+                    {uploadingCover ? (
+                      <div className="flex items-center justify-center space-x-2 py-4 text-xs font-semibold text-[#8F3EC9]">
+                        <svg className="w-5 h-5 animate-spin text-[#8F3EC9]" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        <span>Uploading image to backend...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCoverUpload}
+                          className="text-xs text-zinc-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
+                        />
+                      </div>
+                    )}
                   </div>
                 )
               )}
             </div>
 
-            {/* Title Input (Multiline Auto-expanding, aligned with content starting line) */}
+            {/* Title Input (Multiline Auto-expanding) */}
             <div className="pt-2">
               <textarea
                 ref={titleTextareaRef}
                 rows={1}
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={handleTitleChange}
                 placeholder="Title"
                 className="w-full font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent resize-none overflow-hidden leading-tight block"
               />
             </div>
 
-            {/* Subtitle Input (Multiline Auto-expanding, equal gap above and below) */}
+            {/* Title-Based Live Permalink / URL Slug Generator */}
+            <div className="flex flex-wrap items-center gap-2 text-xs bg-slate-50 border border-slate-200/80 px-3.5 py-2 rounded-xl">
+              <div className="flex items-center gap-1.5 text-slate-500 font-semibold shrink-0">
+                <LinkIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                <span>Permalink:</span>
+                <span className="text-slate-400 font-mono text-[11px]">/blog/view/</span>
+              </div>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => {
+                  setSlug(generateSlug(e.target.value))
+                  setIsSlugEdited(true)
+                  if (errorMessage) setErrorMessage('')
+                }}
+                placeholder="post-slug-url"
+                className="bg-white border border-slate-200 rounded px-2 py-0.5 font-mono text-xs text-[#8F3EC9] font-bold outline-none focus:border-[#8F3EC9] flex-1 min-w-[140px]"
+              />
+              {isSlugEdited && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSlugEdited(false)
+                    setSlug(generateSlug(title))
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
+                  title="Reset slug from title"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+
+            {/* Subtitle Input */}
             {(showSubtitleInput || subtitle) && (
-              <div className="relative flex items-start group/sub animate-fade-in my-3.5">
+              <div className="relative flex items-start group/sub animate-fade-in my-2">
                 <textarea
                   ref={subtitleTextareaRef}
                   rows={1}
                   autoFocus={showSubtitleInput && !subtitle}
                   value={subtitle}
                   onChange={(e) => setSubtitle(e.target.value)}
-                  placeholder="Write a subtitle..."
+                  placeholder="Write a subtitle or brief summary..."
                   className="w-full font-medium-sans italic text-lg sm:text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent pr-8 resize-none overflow-hidden leading-relaxed block"
                 />
                 <button
@@ -578,7 +753,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             )}
 
             {/* Default Divider Line under Subtitle / Header */}
-            <div className="border-b border-zinc-200/80 my-5" />
+            <div className="border-b border-zinc-200/80 my-4" />
 
             {/* Core Medium Tiptap Editor Component */}
             <div>
@@ -605,13 +780,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               {/* Author Meta Bar */}
               <div className="flex items-center justify-between pt-4 border-t border-b border-zinc-200 py-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#8F3EC9] text-white flex items-center justify-center font-bold text-sm">
                     EA
                   </div>
                   <div>
-                    <h5 className="text-sm font-semibold text-zinc-900">Energy Autonomy Team</h5>
+                    <h5 className="text-sm font-semibold text-zinc-900">Energy Autonomy</h5>
                     <p className="text-xs text-zinc-500">
-                      Published on {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {readingTime} min read
+                      {status === 'published' ? 'Published' : 'Draft'} • {readingTime} min read
                     </p>
                   </div>
                 </div>
@@ -642,7 +817,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {/* Article Tags Footer */}
             <div className="pt-8 border-t border-zinc-200 flex items-center space-x-2">
               {tags.map((tag) => (
-                <span key={tag} className="px-3 py-1 bg-zinc-100 text-zinc-600 text-xs rounded-full font-medium">
+                <span key={tag} className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
                   #{tag}
                 </span>
               ))}
