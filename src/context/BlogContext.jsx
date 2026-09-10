@@ -19,15 +19,15 @@ export const BlogProvider = ({ children }) => {
 
   const updatePost = (id, updates) => {
     setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
+      prev.map((p) => (String(p.id) === String(id) ? { ...p, ...updates } : p))
     );
   };
 
   const deletePost = (id) => {
-    setPosts((prev) => prev.filter((p) => p.id !== id));
+    setPosts((prev) => prev.filter((p) => String(p.id) !== String(id)));
   };
 
-  const getPost = (id) => posts.find((p) => p.id === Number(id));
+  const getPost = (id) => posts.find((p) => String(p.id) === String(id));
 
   return (
     <BlogContext.Provider value={{ posts, addPost, updatePost, deletePost, getPost }}>

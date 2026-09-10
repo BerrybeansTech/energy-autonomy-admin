@@ -16,5 +16,8 @@ export const BLOG_IMAGES = {
 
 export const getBlogImage = (key) => {
   if (!key) return blog1;
+  if (typeof key === 'string' && (key.startsWith('data:') || key.startsWith('http') || key.startsWith('blob:') || key.startsWith('/'))) {
+    return key;
+  }
   return BLOG_IMAGES[key]?.src || BLOG_IMAGES[key.toLowerCase()]?.src || blog1;
 };

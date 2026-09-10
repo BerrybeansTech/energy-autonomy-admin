@@ -15,7 +15,7 @@ import { ScrollToTop } from './components/common';
 const BlogCreateWrapper = () => {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-[#fcfcfc]">
+    <div className="min-h-screen bg-white">
       <BlogCreatePage onBackToDashboard={() => navigate('/blog')} />
     </div>
   );
@@ -64,9 +64,7 @@ const App = () => {
               path="/blog/edit/:id"
               element={
                 <ProtectedRoute>
-                  <AdminLayout>
-                    <BlogFormPage mode="edit" />
-                  </AdminLayout>
+                  <BlogCreateWrapper />
                 </ProtectedRoute>
               }
             />
