@@ -10,12 +10,13 @@ import BlogListPage from './pages/BlogListPage';
 import BlogFormPage from './pages/BlogFormPage';
 import BlogViewPage from './pages/BlogViewPage';
 import BlogCreatePage from './components/BlogCreatePage';
+import { ScrollToTop } from './components/common';
 
 const BlogCreateWrapper = () => {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-[#fcfcfc]">
-      <BlogCreatePage onBackToDashboard={() => navigate('/dashboard')} />
+    <div className="min-h-screen bg-white">
+      <BlogCreatePage onBackToDashboard={() => navigate('/blog')} />
     </div>
   );
 };
@@ -23,6 +24,7 @@ const BlogCreateWrapper = () => {
 const App = () => {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <BlogProvider>
           <Routes>
@@ -62,9 +64,7 @@ const App = () => {
               path="/blog/edit/:id"
               element={
                 <ProtectedRoute>
-                  <AdminLayout>
-                    <BlogFormPage mode="edit" />
-                  </AdminLayout>
+                  <BlogCreateWrapper />
                 </ProtectedRoute>
               }
             />

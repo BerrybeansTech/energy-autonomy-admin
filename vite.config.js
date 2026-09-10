@@ -16,7 +16,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@frontend': path.resolve(__dirname, '../Energy-Autonomy/src'),
+      '@frontend': path.resolve(__dirname, '../Energy-Autonomy-Frontend/src'),
     },
   },
 })

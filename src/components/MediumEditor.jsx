@@ -31,11 +31,11 @@ import {
 // Preset Colors for Word Coloring
 const COLOR_PRESETS = [
   { name: 'Default Dark', color: '#292929' },
-  { name: 'Medium Green', color: '#1a8917' },
+  { name: 'Primary Purple', color: '#8F3EC9' },
+  { name: 'Warm Coral', color: '#FE9B40' },
   { name: 'Emerald', color: '#10b981' },
   { name: 'Ocean Blue', color: '#2563eb' },
   { name: 'Sky Cyan', color: '#0284c7' },
-  { name: 'Purple', color: '#8b5cf6' },
   { name: 'Crimson Red', color: '#ef4444' },
   { name: 'Sunset Amber', color: '#f59e0b' },
   { name: 'Deep Gray', color: '#6b7280' },
@@ -148,7 +148,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: 'text-emerald-700 underline font-medium cursor-pointer',
+          class: 'text-[#8F3EC9] underline font-medium cursor-pointer',
         },
       }),
     ],
@@ -190,6 +190,21 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
     document.addEventListener('mouseup', handleMouseUp)
     return () => document.removeEventListener('mouseup', handleMouseUp)
   }, [editor])
+
+  // Sync initialContent when prefilled in Edit Mode
+  useEffect(() => {
+    if (editor && initialContent) {
+      try {
+        const currentJson = JSON.stringify(editor.getJSON())
+        const nextJson = JSON.stringify(initialContent)
+        if (currentJson !== nextJson && !editor.isFocused) {
+          editor.commands.setContent(initialContent)
+        }
+      } catch (err) {
+        // fallback
+      }
+    }
+  }, [editor, initialContent])
 
   if (!editor) return null
 
@@ -267,7 +282,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
   const currentColor = editor.getAttributes('textStyle').color || '#292929'
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-4xl mx-auto tiptap-editor pl-12">
+    <div ref={containerRef} className="relative w-full tiptap-editor">
       {/* ------------------------------------------------------------- */}
       {/* SELECTION BUBBLE TOOLBAR                                      */}
       {/* ------------------------------------------------------------- */}
@@ -286,7 +301,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('bold') ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('bold') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Bold"
           >
@@ -299,7 +314,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleItalic().run()}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('italic') ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('italic') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Italic"
           >
@@ -315,7 +330,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
               setShowLinkModal(true)
             }}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('link') ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('link') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Add Link"
           >
@@ -330,7 +345,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 font-serif font-bold text-sm transition-colors cursor-pointer ${
-              editor.isActive('heading', { level: 1 }) ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('heading', { level: 1 }) ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Large Heading (H1)"
           >
@@ -343,7 +358,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 text-sm transition-colors cursor-pointer ${
-              editor.isActive('heading', { level: 2 }) ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('heading', { level: 2 }) ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Small Heading (H2)"
           >
@@ -356,7 +371,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('blockquote') ? 'text-emerald-400 bg-zinc-800' : 'text-zinc-300'
+              editor.isActive('blockquote') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
             }`}
             title="Blockquote"
           >
@@ -442,7 +457,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
       {plusPosition.show && (
         <div
           style={{ top: `${plusPosition.top}px` }}
-          className="absolute left-0 z-30 flex items-center space-x-2 transition-all duration-150"
+          className="absolute -left-10 z-30 flex items-center space-x-2 transition-all duration-150"
         >
           {/* Plus Toggle Button */}
           <button
@@ -467,7 +482,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowImageModal(true)}
-                className="w-8 h-8 rounded-full border border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border border-purple-200 text-[#8F3EC9] hover:bg-purple-50 flex items-center justify-center transition-colors cursor-pointer"
                 title="Add Image"
               >
                 <ImageIcon className="w-4 h-4" />
@@ -478,7 +493,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleAddDivider}
-                className="w-8 h-8 rounded-full border border-emerald-600/30 text-emerald-700 hover:bg-emerald-50 flex items-center justify-center transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full border border-purple-200 text-[#8F3EC9] hover:bg-purple-50 flex items-center justify-center transition-colors cursor-pointer"
                 title="Add Divider Line"
               >
                 <Minus className="w-4 h-4" />
@@ -491,8 +506,8 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
                 onClick={handleAddBulletList}
                 className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('bulletList')
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'border-emerald-600/30 text-emerald-700 hover:bg-emerald-50'
+                    ? 'bg-[#8F3EC9] text-white border-[#8F3EC9]'
+                    : 'border-purple-200 text-[#8F3EC9] hover:bg-purple-50'
                 }`}
                 title="Bullet Points (Lists)"
               >
@@ -506,8 +521,8 @@ const MediumEditor = ({ onJsonUpdate, initialContent }) => {
                 onClick={handleAddOrderedList}
                 className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('orderedList')
-                    ? 'bg-emerald-600 text-white border-emerald-600'
-                    : 'border-emerald-600/30 text-emerald-700 hover:bg-emerald-50'
+                    ? 'bg-[#8F3EC9] text-white border-[#8F3EC9]'
+                    : 'border-purple-200 text-[#8F3EC9] hover:bg-purple-50'
                 }`}
                 title="Numbered Count List (1. 2. 3.)"
               >
