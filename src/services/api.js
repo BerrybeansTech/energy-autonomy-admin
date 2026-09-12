@@ -214,6 +214,16 @@ export const postsApi = {
   },
 
   /**
+   * Publish blog post by ID (POST /api/posts/:id/publish)
+   */
+  async publish(id, payload = {}) {
+    return apiRequest(`/api/posts/${encodeURIComponent(id)}/publish`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
    * Update status of post ('draft', 'published', 'archived')
    */
   async updateStatus(id, status) {

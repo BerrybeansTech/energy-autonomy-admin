@@ -11,25 +11,23 @@ import Highlight from '@tiptap/extension-highlight'
 import { uploadApi } from '../services/api'
 
 import {
-  Bold,
-  Italic,
+  Undo,
+  Redo,
+  ChevronDown,
   Link as LinkIcon,
-  Heading1,
-  Heading2,
-  Quote,
-  Plus,
-  X,
+  Unlink,
   Image as ImageIcon,
-  Video,
+  Quote,
   Minus,
   List,
   ListOrdered,
-  Palette,
   Check,
-  Unlink
+  X,
+  Upload,
+  Globe
 } from 'lucide-react'
 
-// Preset Colors for Word Coloring
+// Curated brand color presets for Text Color
 const COLOR_PRESETS = [
   { name: 'Default Dark', color: '#292929' },
   { name: 'Primary Purple', color: '#8F3EC9' },
@@ -39,89 +37,59 @@ const COLOR_PRESETS = [
   { name: 'Sky Cyan', color: '#0284c7' },
   { name: 'Crimson Red', color: '#ef4444' },
   { name: 'Sunset Amber', color: '#f59e0b' },
-  { name: 'Deep Gray', color: '#6b7280' },
+  { name: 'Deep Gray', color: '#64748b' },
+  { name: 'Muted Slate', color: '#94a3b8' },
+]
+
+// Soft pastel presets for Highlighter
+const HIGHLIGHT_PRESETS = [
+  { name: 'Soft Yellow', color: '#fef08a' },
+  { name: 'Soft Green', color: '#bbf7d0' },
+  { name: 'Soft Blue', color: '#bfdbfe' },
+  { name: 'Soft Purple', color: '#e9d5ff' },
+  { name: 'Soft Coral', color: '#fed7aa' },
+  { name: 'Soft Rose', color: '#fbcfe8' },
 ]
 
 const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
+  // Popover menus state
+  const [showStyleDropdown, setShowStyleDropdown] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
-  const [customColor, setCustomColor] = useState('#1a8917')
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false)
+  const [customColor, setCustomColor] = useState('#8F3EC9')
+
+  // Modals state
   const [showLinkModal, setShowLinkModal] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
-
-  // Stable Bubble Toolbar position state
-  const [bubblePosition, setBubblePosition] = useState({ show: false, top: 0, left: 0 })
-
-  // Floating plus button position state (appears on empty lines)
-  const [plusPosition, setPlusPosition] = useState({ show: false, top: 0 })
-
-  // Floating menu modal states
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
-  const [showVideoModal, setShowVideoModal] = useState(false)
-  const [videoUrl, setVideoUrl] = useState('')
-
-  // Floating Plus Menu Expanded state
-  const [plusOpen, setPlusOpen] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+
+  // Editor selection update ticker to keep toolbar active states in sync
+  const [, setSelectionTick] = useState(0)
 
   const containerRef = useRef(null)
   const fileInputRef = useRef(null)
+  const styleMenuRef = useRef(null)
+  const colorMenuRef = useRef(null)
+  const highlightMenuRef = useRef(null)
 
-  const updatePositions = (currentEditor) => {
-    if (!currentEditor || !containerRef.current) return
-
-    const { selection } = currentEditor.state
-    const { empty, from, to, $anchor } = selection
-
-    // Update Bubble Menu position directly from ProseMirror coordinates
-    if (!empty) {
-      try {
-        const startCoords = currentEditor.view.coordsAtPos(from)
-        const endCoords = currentEditor.view.coordsAtPos(to)
-        const containerRect = containerRef.current.getBoundingClientRect()
-
-        const selectionLeft = Math.min(startCoords.left, endCoords.left)
-        const selectionRight = Math.max(startCoords.right, endCoords.right)
-        const selectionTop = Math.min(startCoords.top, endCoords.top)
-
-        const left = Math.max(80, (selectionLeft + selectionRight) / 2 - containerRect.left)
-        const top = selectionTop - containerRect.top - 54
-
-        setBubblePosition({
-          show: true,
-          top: top,
-          left: left,
-        })
-      } catch {
-        // preserve position on transient updates
+  // Close popovers on click outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (styleMenuRef.current && !styleMenuRef.current.contains(e.target)) {
+        setShowStyleDropdown(false)
       }
-    } else {
-      setBubblePosition({ show: false, top: 0, left: 0 })
-      setShowColorPicker(false)
-    }
-
-    // Update Plus Icon position (appears on EVERY empty line)
-    const parentNode = $anchor.parent
-    const isLineEmpty = (parentNode.type.name === 'paragraph' || parentNode.type.name === 'heading') && parentNode.textContent === ''
-
-    if (isLineEmpty && currentEditor.isFocused) {
-      try {
-        const coords = currentEditor.view.coordsAtPos($anchor.pos)
-        const containerRect = containerRef.current.getBoundingClientRect()
-        const topOffset = coords.top - containerRect.top - 4
-
-        setPlusPosition({
-          show: true,
-          top: Math.max(0, topOffset),
-        })
-      } catch {
-        setPlusPosition({ show: true, top: 20 })
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target)) {
+        setShowColorPicker(false)
       }
-    } else {
-      setPlusPosition({ show: false, top: 0 })
-      setPlusOpen(false)
+      if (highlightMenuRef.current && !highlightMenuRef.current.contains(e.target)) {
+        setShowHighlightPicker(false)
+      }
     }
-  }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const editor = useEditor({
     editable: Boolean(editable),
@@ -130,6 +98,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
         heading: {
           levels: [1, 2, 3],
         },
+        link: false,
       }),
       Placeholder.configure({
         placeholder: 'Write your blog...',
@@ -170,29 +139,21 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
       if (onJsonUpdate) {
         onJsonUpdate(editor.getJSON())
       }
-      updatePositions(editor)
+      setSelectionTick((t) => t + 1)
     },
-    onSelectionUpdate: ({ editor }) => {
-      updatePositions(editor)
+    onSelectionUpdate: () => {
+      setSelectionTick((t) => t + 1)
     },
-    onFocus: ({ editor }) => {
-      updatePositions(editor)
+    onTransaction: () => {
+      setSelectionTick((t) => t + 1)
+    },
+    onFocus: () => {
+      setSelectionTick((t) => t + 1)
+    },
+    onBlur: () => {
+      setSelectionTick((t) => t + 1)
     },
   })
-
-  // Hide bubble toolbar if editor loses selection
-  useEffect(() => {
-    const handleMouseUp = (e) => {
-      if (containerRef.current && containerRef.current.contains(e.target)) {
-        return
-      }
-      if (editor && editor.state.selection.empty) {
-        setBubblePosition({ show: false, top: 0, left: 0 })
-      }
-    }
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => document.removeEventListener('mouseup', handleMouseUp)
-  }, [editor])
 
   // Sync initialContent when prefilled in Edit Mode
   useEffect(() => {
@@ -217,17 +178,53 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
 
   if (!editor) return null
 
-  // Word Color Helper
-  const applyColor = (hexColor) => {
-    if (hexColor) {
-      editor.chain().focus().setColor(hexColor).run()
-    } else {
-      editor.chain().focus().unsetColor().run()
+  // Universal Command Runner: works whether text is selected or cursor is idle for typing
+  const executeCommand = (commandFn) => {
+    if (!editor) return
+    if (!editor.isFocused) {
+      editor.commands.focus()
     }
+    const chain = editor.chain().focus()
+    commandFn(chain)
+    setSelectionTick((t) => t + 1)
+  }
+
+  // Active state helpers
+  const currentColor = editor.getAttributes('textStyle').color || ''
+  const currentHighlightColor =
+    editor.getAttributes('highlight').color ||
+    (editor.isActive('highlight') ? '#fef08a' : '#fef08a')
+
+  const getCurrentStyleLabel = () => {
+    if (editor.isActive('heading', { level: 1 })) return 'Heading 1'
+    if (editor.isActive('heading', { level: 2 })) return 'Heading 2'
+    if (editor.isActive('heading', { level: 3 })) return 'Heading 3'
+    return 'Style'
+  }
+
+  // Formatting actions
+  const applyColor = (hexColor) => {
+    executeCommand((chain) => {
+      if (hexColor) {
+        chain.setColor(hexColor).run()
+      } else {
+        chain.unsetColor().run()
+      }
+    })
     setShowColorPicker(false)
   }
 
-  // Link Helpers
+  const applyHighlight = (hexColor) => {
+    executeCommand((chain) => {
+      if (hexColor) {
+        chain.setHighlight({ color: hexColor }).run()
+      } else {
+        chain.unsetHighlight().run()
+      }
+    })
+    setShowHighlightPicker(false)
+  }
+
   const handleSetLink = () => {
     if (!linkUrl) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
@@ -238,13 +235,11 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
     setLinkUrl('')
   }
 
-  // Floating Plus Actions
   const handleAddImageFromUrl = () => {
     if (imageUrl) {
       editor.chain().focus().setImage({ src: imageUrl }).run()
       setImageUrl('')
       setShowImageModal(false)
-      setPlusOpen(false)
     }
   }
 
@@ -264,360 +259,567 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
       } finally {
         setUploadingImage(false)
         setShowImageModal(false)
-        setPlusOpen(false)
         if (e.target) e.target.value = ''
       }
     }
   }
 
-  const handleAddVideo = () => {
-    if (videoUrl) {
-      editor.chain().focus().setYoutubeVideo({ src: videoUrl }).run()
-      setVideoUrl('')
-      setShowVideoModal(false)
-      setPlusOpen(false)
-    }
-  }
-
-  const handleAddDivider = () => {
-    editor.chain().focus().setHorizontalRule().run()
-    setPlusOpen(false)
-  }
-
-  const handleAddBulletList = () => {
-    editor.chain().focus().toggleBulletList().run()
-    setPlusOpen(false)
-  }
-
-  const handleAddOrderedList = () => {
-    editor.chain().focus().toggleOrderedList().run()
-    setPlusOpen(false)
-  }
-
-  const currentColor = editor.getAttributes('textStyle').color || '#292929'
-
   return (
     <div ref={containerRef} className="relative w-full tiptap-editor">
       {/* ------------------------------------------------------------- */}
-      {/* SELECTION BUBBLE TOOLBAR                                      */}
+      {/* ROUNDED TOP TOOLBAR (Substack-Style, Admin Panel Native)      */}
       {/* ------------------------------------------------------------- */}
-      {editable && bubblePosition.show && (
-        <div
-          style={{
-            top: `${bubblePosition.top}px`,
-            left: `${bubblePosition.left}px`,
-            transform: 'translateX(-50%)',
-          }}
-          className="absolute z-50 flex items-center bg-zinc-900 text-white rounded-xl shadow-2xl px-3 py-1.5 space-x-1 border border-zinc-800 transition-all duration-75"
-        >
-          {/* Bold */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('bold') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Bold"
-          >
-            <Bold className="w-4 h-4" />
-          </button>
-
-          {/* Italic */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('italic') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Italic"
-          >
-            <Italic className="w-4 h-4" />
-          </button>
-
-          {/* Link */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              setLinkUrl(editor.getAttributes('link').href || '')
-              setShowLinkModal(true)
-            }}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('link') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Add Link"
-          >
-            <LinkIcon className="w-4 h-4" />
-          </button>
-
-          <div className="w-[1px] h-5 bg-zinc-700 mx-1" />
-
-          {/* Heading 1 (Large Title) */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 font-serif font-bold text-sm transition-colors cursor-pointer ${
-              editor.isActive('heading', { level: 1 }) ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Large Heading (H1)"
-          >
-            <Heading1 className="w-4 h-4" />
-          </button>
-
-          {/* Heading 2 (Subtitle) */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 text-sm transition-colors cursor-pointer ${
-              editor.isActive('heading', { level: 2 }) ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Small Heading (H2)"
-          >
-            <Heading2 className="w-4 h-4" />
-          </button>
-
-          {/* Blockquote */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={`p-1.5 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer ${
-              editor.isActive('blockquote') ? 'text-purple-400 bg-zinc-800' : 'text-zinc-300'
-            }`}
-            title="Blockquote"
-          >
-            <Quote className="w-4 h-4" />
-          </button>
-
-          <div className="w-[1px] h-5 bg-zinc-700 mx-1" />
-
-          {/* SPECIFIC WORD COLORING PICKER */}
-          <div className="relative">
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors flex items-center space-x-1.5 cursor-pointer"
-              title="Change Specific Word Color"
-            >
-              <div
-                className="w-4 h-4 rounded-full border border-white/50 shadow-inner"
-                style={{ backgroundColor: currentColor }}
-              />
-              <Palette className="w-3.5 h-3.5 text-zinc-300" />
-            </button>
-
-            {/* Word Color Popover Swatches */}
-            {showColorPicker && (
-              <div
+      {editable && (
+        <div className="w-full pb-3.5 mb-5 border-b border-slate-200 flex items-center gap-1 sm:gap-1.5 flex-wrap relative z-30">
+          <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+              {/* 1. History: Undo & Redo */}
+              <button
+                type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                className="absolute top-10 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 rounded-xl p-3 shadow-2xl z-50 w-56 animate-in fade-in duration-100"
+                disabled={!editor.can().undo()}
+                onClick={() => executeCommand((chain) => chain.undo().run())}
+                className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                  editor.can().undo()
+                    ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-300 cursor-not-allowed'
+                }`}
+                title="Undo (Ctrl+Z)"
               >
-                <div className="text-xs font-semibold text-zinc-400 mb-2 px-1">Specific Word Color</div>
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {COLOR_PRESETS.map((preset) => (
+                <Undo className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={!editor.can().redo()}
+                onClick={() => executeCommand((chain) => chain.redo().run())}
+                className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                  editor.can().redo()
+                    ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-300 cursor-not-allowed'
+                }`}
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo className="w-4 h-4" />
+              </button>
+
+              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+
+              {/* 2. Style Dropdown */}
+              <div className="relative" ref={styleMenuRef}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setShowStyleDropdown(!showStyleDropdown)
+                    setShowColorPicker(false)
+                    setShowHighlightPicker(false)
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    showStyleDropdown ||
+                    editor.isActive('heading') ||
+                    editor.isActive('blockquote') ||
+                    editor.isActive('codeBlock')
+                      ? 'bg-purple-50 text-[#8F3EC9]'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Text Style"
+                >
+                  <span>{getCurrentStyleLabel()}</span>
+                  <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                </button>
+
+                {showStyleDropdown && (
+                  <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <button
                       type="button"
-                      key={preset.color}
                       onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyColor(preset.color)}
-                      className="w-7 h-7 rounded-full border border-zinc-700 hover:scale-110 transition-transform relative flex items-center justify-center cursor-pointer"
-                      style={{ backgroundColor: preset.color }}
-                      title={preset.name}
+                      onClick={() => {
+                        executeCommand((chain) => chain.setParagraph().run())
+                        setShowStyleDropdown(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                        editor.isActive('paragraph') &&
+                        !editor.isActive('heading') &&
+                        !editor.isActive('blockquote') &&
+                        !editor.isActive('codeBlock')
+                          ? 'bg-purple-50 text-[#8F3EC9] font-bold'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
                     >
-                      {currentColor.toLowerCase() === preset.color.toLowerCase() && (
-                        <Check className="w-3.5 h-3.5 text-white drop-shadow" />
+                      <span>Normal text</span>
+                      {editor.isActive('paragraph') &&
+                        !editor.isActive('heading') &&
+                        !editor.isActive('blockquote') &&
+                        !editor.isActive('codeBlock') && (
+                          <Check className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                        )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        executeCommand((chain) => chain.toggleHeading({ level: 1 }).run())
+                        setShowStyleDropdown(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-sm font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
+                        editor.isActive('heading', { level: 1 })
+                          ? 'bg-purple-50 text-[#8F3EC9]'
+                          : 'text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>Heading 1</span>
+                      {editor.isActive('heading', { level: 1 }) && (
+                        <Check className="w-3.5 h-3.5 text-[#8F3EC9]" />
                       )}
                     </button>
-                  ))}
-                </div>
 
-                {/* Custom Color Input */}
-                <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800">
-                  <input
-                    type="color"
-                    value={customColor}
-                    onChange={(e) => setCustomColor(e.target.value)}
-                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
-                  />
-                  <input
-                    type="text"
-                    value={customColor}
-                    onChange={(e) => setCustomColor(e.target.value)}
-                    placeholder="#1a8917"
-                    className="w-20 bg-zinc-800 border border-zinc-700 text-xs text-white rounded px-2 py-1 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyColor(customColor)}
-                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-medium cursor-pointer"
-                  >
-                    Apply
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        executeCommand((chain) => chain.toggleHeading({ level: 2 }).run())
+                        setShowStyleDropdown(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
+                        editor.isActive('heading', { level: 2 })
+                          ? 'bg-purple-50 text-[#8F3EC9]'
+                          : 'text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>Heading 2</span>
+                      {editor.isActive('heading', { level: 2 }) && (
+                        <Check className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        executeCommand((chain) => chain.toggleHeading({ level: 3 }).run())
+                        setShowStyleDropdown(false)
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-serif font-semibold flex items-center justify-between cursor-pointer transition-colors ${
+                        editor.isActive('heading', { level: 3 })
+                          ? 'bg-purple-50 text-[#8F3EC9]'
+                          : 'text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>Heading 3</span>
+                      {editor.isActive('heading', { level: 3 }) && (
+                        <Check className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* FLOATING ROUNDED PLUS (+) ICON WITH LIST & NUMBERING OPTIONS   */}
-      {/* ------------------------------------------------------------- */}
-      {editable && plusPosition.show && (
-        <div
-          style={{ top: `${plusPosition.top}px` }}
-          className="absolute -left-10 z-30 flex items-center space-x-2 transition-all duration-150"
-        >
-          {/* Plus Toggle Button */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setPlusOpen(!plusOpen)}
-            className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer ${
-              plusOpen
-                ? 'border-zinc-800 bg-zinc-900 text-white rotate-45'
-                : 'border-zinc-300 hover:border-zinc-600 text-zinc-600 hover:text-zinc-900 bg-white shadow-xs'
-            }`}
-            title="Insert element"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
 
-          {/* Expanded Options Menu: Image, Video, Divider, Bullet List, Numbered Count */}
-          {plusOpen && (
-            <div className="flex items-center space-x-2 bg-white border border-zinc-200 rounded-full px-2 py-1 shadow-md animate-in fade-in slide-in-from-left-2 duration-150">
-              {/* Image Option */}
+              {/* 3. Inline Typography Formatting */}
+              {/* Bold (B) */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand((chain) => chain.toggleBold().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-bold text-sm select-none ${
+                  editor.isActive('bold')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Bold (Ctrl+B)"
+              >
+                B
+              </button>
+
+              {/* Italic (I) */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand((chain) => chain.toggleItalic().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer italic font-serif text-sm font-semibold select-none ${
+                  editor.isActive('italic')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Italic (Ctrl+I)"
+              >
+                I
+              </button>
+
+              {/* Strikethrough (S) */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand((chain) => chain.toggleStrike().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer line-through text-sm font-semibold select-none ${
+                  editor.isActive('strike')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Strikethrough"
+              >
+                S
+              </button>
+
+              {/* Inline Code (<>) */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand((chain) => chain.toggleCode().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-mono text-xs font-bold select-none ${
+                  editor.isActive('code')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Inline Code"
+              >
+                &lt;&gt;
+              </button>
+
+              {/* Text Color (T with color bar) */}
+              <div className="relative" ref={colorMenuRef}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setShowColorPicker(!showColorPicker)
+                    setShowStyleDropdown(false)
+                    setShowHighlightPicker(false)
+                  }}
+                  className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                    showColorPicker || editor.getAttributes('textStyle').color
+                      ? 'bg-purple-100 text-[#8F3EC9]'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Text Color"
+                >
+                  <span className="font-serif font-bold text-sm leading-none">T</span>
+                  <span
+                    className="w-4 h-[3px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    style={{ backgroundColor: currentColor || '#292929' }}
+                  />
+                </button>
+
+                {showColorPicker && (
+                  <div className="absolute top-full mt-2 -left-12 sm:left-0 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Text Color
+                    </div>
+                    <div className="grid grid-cols-5 gap-2 mb-3">
+                      {COLOR_PRESETS.map((preset) => (
+                        <button
+                          type="button"
+                          key={preset.color}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => applyColor(preset.color)}
+                          className="w-7 h-7 rounded-full border border-slate-200 hover:scale-110 transition-transform relative flex items-center justify-center cursor-pointer shadow-2xs"
+                          style={{ backgroundColor: preset.color }}
+                          title={preset.name}
+                        >
+                          {currentColor.toLowerCase() === preset.color.toLowerCase() && (
+                            <Check className="w-3.5 h-3.5 text-white drop-shadow" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                      <input
+                        type="color"
+                        value={customColor}
+                        onChange={(e) => setCustomColor(e.target.value)}
+                        className="w-7 h-7 rounded-lg cursor-pointer border border-slate-200 bg-transparent p-0"
+                      />
+                      <input
+                        type="text"
+                        value={customColor}
+                        onChange={(e) => setCustomColor(e.target.value)}
+                        placeholder="#8F3EC9"
+                        className="w-20 bg-slate-50 border border-slate-200 text-xs text-slate-800 rounded-lg px-2 py-1 focus:outline-none focus:border-[#8F3EC9]"
+                      />
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => applyColor(customColor)}
+                        className="px-2.5 py-1 bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        Apply
+                      </button>
+                    </div>
+
+                    {currentColor && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => applyColor(null)}
+                        className="w-full mt-2 pt-2 border-t border-slate-100 text-center text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        Reset to Default Color
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Text Highlight (A with highlight bar) */}
+              <div className="relative" ref={highlightMenuRef}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setShowHighlightPicker(!showHighlightPicker)
+                    setShowStyleDropdown(false)
+                    setShowColorPicker(false)
+                  }}
+                  className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                    showHighlightPicker || editor.isActive('highlight')
+                      ? 'bg-purple-100 text-[#8F3EC9]'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  title="Text Highlight"
+                >
+                  <span className="font-serif font-bold text-sm leading-none">A</span>
+                  <span
+                    className="w-4 h-[3px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    style={{ backgroundColor: currentHighlightColor }}
+                  />
+                </button>
+
+                {showHighlightPicker && (
+                  <div className="absolute top-full mt-2 -left-16 sm:left-0 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Highlight Color
+                    </div>
+                    <div className="grid grid-cols-6 gap-1.5 mb-2">
+                      {HIGHLIGHT_PRESETS.map((preset) => (
+                        <button
+                          type="button"
+                          key={preset.color}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => applyHighlight(preset.color)}
+                          className="w-6 h-6 rounded-lg border border-slate-200 hover:scale-110 transition-transform relative flex items-center justify-center cursor-pointer shadow-2xs"
+                          style={{ backgroundColor: preset.color }}
+                          title={preset.name}
+                        >
+                          {editor.isActive('highlight', { color: preset.color }) && (
+                            <Check className="w-3 h-3 text-slate-800" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {editor.isActive('highlight') && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => applyHighlight(null)}
+                        className="w-full pt-2 border-t border-slate-100 text-center text-xs text-slate-500 hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        Remove Highlight
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+
+              {/* 4. Media & Inserts */}
+              {/* Link */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setLinkUrl(editor.getAttributes('link').href || '')
+                  setShowLinkModal(true)
+                }}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  editor.isActive('link')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Insert / Edit Link"
+              >
+                <LinkIcon className="w-4 h-4" />
+              </button>
+
+              {/* Image */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowImageModal(true)}
-                className="w-8 h-8 rounded-full border border-purple-200 text-[#8F3EC9] hover:bg-purple-50 flex items-center justify-center transition-colors cursor-pointer"
-                title="Add Image"
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Insert Image"
               >
                 <ImageIcon className="w-4 h-4" />
               </button>
 
-              {/* Divider Option */}
+              {/* Quote */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={handleAddDivider}
-                className="w-8 h-8 rounded-full border border-purple-200 text-[#8F3EC9] hover:bg-purple-50 flex items-center justify-center transition-colors cursor-pointer"
-                title="Add Divider Line"
+                onClick={() => executeCommand((chain) => chain.toggleBlockquote().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  editor.isActive('blockquote')
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title="Blockquote"
+              >
+                <Quote className="w-4 h-4" />
+              </button>
+
+              {/* Divider Line */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => executeCommand((chain) => chain.setHorizontalRule().run())}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Insert Divider"
               >
                 <Minus className="w-4 h-4" />
               </button>
 
-              {/* Bullet Points Option */}
+              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+
+              {/* 5. Lists */}
+              {/* Bullet List */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={handleAddBulletList}
-                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                onClick={() => executeCommand((chain) => chain.toggleBulletList().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('bulletList')
-                    ? 'bg-[#8F3EC9] text-white border-[#8F3EC9]'
-                    : 'border-purple-200 text-[#8F3EC9] hover:bg-purple-50'
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
-                title="Bullet Points (Lists)"
+                title="Bullet List"
               >
                 <List className="w-4 h-4" />
               </button>
 
-              {/* Numbered Count Option */}
+              {/* Numbered List */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={handleAddOrderedList}
-                className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                onClick={() => executeCommand((chain) => chain.toggleOrderedList().run())}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('orderedList')
-                    ? 'bg-[#8F3EC9] text-white border-[#8F3EC9]'
-                    : 'border-purple-200 text-[#8F3EC9] hover:bg-purple-50'
+                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
-                title="Numbered Count List (1. 2. 3.)"
+                title="Numbered List"
               >
                 <ListOrdered className="w-4 h-4" />
               </button>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
       {/* Editor Content Area */}
-      <div className="bg-transparent text-zinc-900 font-medium-serif text-xl leading-relaxed min-h-[400px]">
+      <div className="bg-transparent text-zinc-900 font-medium-serif text-xl leading-relaxed min-h-[420px]">
         <EditorContent editor={editor} />
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODALS: LINK, IMAGE, VIDEO                                    */}
+      {/* ------------------------------------------------------------- */}
 
       {/* LINK MODAL */}
       {showLinkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-md border border-zinc-200 space-y-4">
-            <h4 className="text-base font-semibold text-zinc-800">Insert / Edit Link</h4>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-[#8F3EC9]" />
+                <span>Insert or Edit Link</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowLinkModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
             <input
               type="url"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"
+              className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9]"
               autoFocus
             />
-            <div className="flex items-center justify-end space-x-2">
-              {editor.isActive('link') && (
+
+            <div className="flex items-center justify-between pt-2">
+              {editor.isActive('link') ? (
                 <button
                   type="button"
                   onClick={() => {
                     editor.chain().focus().unsetLink().run()
                     setShowLinkModal(false)
                   }}
-                  className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg flex items-center space-x-1"
+                  className="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Unlink className="w-3.5 h-3.5" />
                   <span>Remove Link</span>
                 </button>
+              ) : (
+                <div />
               )}
-              <button
-                type="button"
-                onClick={() => setShowLinkModal(false)}
-                className="px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSetLink}
-                className="px-4 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-              >
-                Save Link
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLinkModal(false)}
+                  className="px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSetLink}
+                  className="px-4 py-1.5 text-xs font-bold bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  Save Link
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* IMAGE MODAL (Upload / URL) */}
+      {/* IMAGE MODAL */}
       {showImageModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-zinc-200 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h4 className="text-base font-semibold text-zinc-800 flex items-center space-x-2">
-                <ImageIcon className="w-5 h-5 text-emerald-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#8F3EC9]" />
                 <span>Insert Image</span>
               </h4>
-              <button onClick={() => setShowImageModal(false)} className="text-zinc-400 hover:text-zinc-700">
-                <X className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Upload Local File to Server</label>
+            <div className="space-y-4">
+              {/* Upload to Server */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                  <span>Upload Local File to Server</span>
+                </label>
                 {uploadingImage ? (
-                  <div className="flex items-center space-x-2 text-xs text-[#8F3EC9] font-medium py-2">
+                  <div className="flex items-center gap-2 text-xs text-[#8F3EC9] font-medium py-3 justify-center">
                     <svg className="w-4 h-4 animate-spin text-[#8F3EC9]" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                       <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -630,34 +832,38 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                     accept="image/*"
                     onChange={handleFileUpload}
                     ref={fileInputRef}
-                    className="block w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-[#8F3EC9] hover:file:bg-purple-100 cursor-pointer"
+                    className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-[#8F3EC9] hover:file:bg-purple-100 cursor-pointer"
                   />
                 )}
               </div>
 
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-zinc-200"></div>
-                <span className="flex-shrink mx-3 text-xs text-zinc-400 font-medium">OR VIA URL</span>
-                <div className="flex-grow border-t border-zinc-200"></div>
+              <div className="relative flex items-center py-1">
+                <div className="flex-grow border-t border-slate-200" />
+                <span className="flex-shrink mx-3 text-[11px] text-slate-400 font-semibold tracking-wider">OR VIA DIRECT URL</span>
+                <div className="flex-grow border-t border-slate-200" />
               </div>
 
+              {/* Direct Image URL */}
               <div>
-                <label className="block text-xs font-medium text-zinc-600 mb-1">Direct Image Web Address</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                  <span>Direct Image Web Address</span>
+                </label>
                 <input
                   type="url"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"
+                  placeholder="https://images.unsplash.com/..."
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9]"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowImageModal(false)}
-                className="px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg"
+                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -665,56 +871,9 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onClick={handleAddImageFromUrl}
                 disabled={!imageUrl}
-                className="px-5 py-2 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg cursor-pointer"
+                className="px-4 py-2 text-xs font-bold bg-[#8F3EC9] hover:bg-[#7B2EB3] disabled:opacity-40 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 Insert Image URL
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* VIDEO MODAL */}
-      {showVideoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg border border-zinc-200 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h4 className="text-base font-semibold text-zinc-800 flex items-center space-x-2">
-                <Video className="w-5 h-5 text-emerald-600" />
-                <span>Embed YouTube Video</span>
-              </h4>
-              <button onClick={() => setShowVideoModal(false)} className="text-zinc-400 hover:text-zinc-700">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-zinc-600 mb-1">YouTube Video Link</label>
-              <input
-                type="url"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="w-full border border-zinc-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-600"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowVideoModal(false)}
-                className="px-4 py-2 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddVideo}
-                disabled={!videoUrl}
-                className="px-5 py-2 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg cursor-pointer"
-              >
-                Embed Video
               </button>
             </div>
           </div>

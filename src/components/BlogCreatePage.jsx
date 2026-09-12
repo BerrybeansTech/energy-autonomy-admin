@@ -3,8 +3,7 @@ import { Link, useNavigate, useLocation, useParams } from 'react-router-dom'
 import MediumEditor from './MediumEditor'
 import { useBlog } from '../context/BlogContext'
 import { useAuth } from '../context/AuthContext'
-import { uploadApi } from '../services/api'
-import { categories } from '../data/blogData'
+import { uploadApi, postsApi } from '../services/api'
 import {
   Eye,
   Edit3,
@@ -22,7 +21,8 @@ import {
   ChevronUp,
   Link as LinkIcon,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react'
 
 /**
@@ -40,17 +40,23 @@ export function generateSlug(text) {
 
 const BlogCreatePage = ({ onBackToDashboard }) => {
   const { user, logout } = useAuth() || {}
-  const { id } = useParams()
+  const { id: routeId } = useParams()
+  const [postId, setPostId] = useState(routeId || null)
+  const [existingPostStatus, setExistingPostStatus] = useState(null)
+  const [autosaveStatus, setAutosaveStatus] = useState('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  const [lastSavedTime, setLastSavedTime] = useState(null)
+
   const blogContext = useBlog()
   const addPost = blogContext?.addPost
   const updatePost = blogContext?.updatePost
+  const patchPost = blogContext?.patchPost
+  const publishPost = blogContext?.publishPost
   const getPost = blogContext?.getPost
   const navigate = useNavigate()
   const location = useLocation()
 
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
-  const [isSlugEdited, setIsSlugEdited] = useState(false)
   const [status, setStatus] = useState('published')
   const [subtitle, setSubtitle] = useState('')
   const [showSubtitleInput, setShowSubtitleInput] = useState(false)
@@ -58,15 +64,26 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [coverFilename, setCoverFilename] = useState('')
   const [uploadingCover, setUploadingCover] = useState(false)
   const [showCoverInput, setShowCoverInput] = useState(false)
-  const [tags, setTags] = useState(['ENERGY & AWARENESS'])
+  const [labelName, setLabelName] = useState('')
+  const tags = useMemo(() => (labelName && labelName.trim() ? [labelName.trim()] : []), [labelName])
+  const [seoTitle, setSeoTitle] = useState('')
+  const [isSeoTitleEdited, setIsSeoTitleEdited] = useState(false)
+  const [seoDescription, setSeoDescription] = useState('')
+  const [isSeoDescriptionEdited, setIsSeoDescriptionEdited] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
   const [isPublishDrawerOpen, setIsPublishDrawerOpen] = useState(false)
+  const [isOpeningDrawer, setIsOpeningDrawer] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
 
   const titleTextareaRef = useRef(null)
   const subtitleTextareaRef = useRef(null)
+  const isCreatingDraftRef = useRef(false)
+  const createdDraftIdRef = useRef(null)
+  const hasUserInteractedRef = useRef(false)
+  const lastSavedPayloadRef = useRef('')
+  const autosaveTimerRef = useRef(null)
 
   // Auto-resize title textarea to fit multiline content
   useEffect(() => {
@@ -95,23 +112,103 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
   const [isPreviewMode, setIsPreviewMode] = useState(false)
 
-  // Load existing post if editing
+  /**
+   * Initializes a new draft in the database via POST /api/posts and updates URL
+   */
+  const ensureDraftId = async (initialOverrides = {}) => {
+    if (postId) return postId
+    if (isCreatingDraftRef.current) return null
+    isCreatingDraftRef.current = true
+    try {
+      setAutosaveStatus('saving')
+      const finalTitle = initialOverrides.title !== undefined ? initialOverrides.title : (title || '')
+      const finalLabelName = initialOverrides.labelName !== undefined
+        ? initialOverrides.labelName
+        : (labelName && labelName.trim() ? labelName.trim() : null)
+      const finalSlug = initialOverrides.slug !== undefined
+        ? initialOverrides.slug
+        : ((finalTitle && finalTitle.trim()) ? generateSlug(finalTitle.trim()) : undefined)
+
+      const payload = {
+        title: finalTitle,
+        slug: finalSlug,
+        contentJson: initialOverrides.contentJson !== undefined ? initialOverrides.contentJson : editorJson,
+        featuredImage: initialOverrides.featuredImage !== undefined ? initialOverrides.featuredImage : (coverImage || null),
+        labelName: finalLabelName,
+        status: 'draft',
+        seoTitle: initialOverrides.seoTitle !== undefined ? initialOverrides.seoTitle : (seoTitle || null),
+        seoDescription: initialOverrides.seoDescription !== undefined ? initialOverrides.seoDescription : (subtitle || null),
+      }
+      const res = await postsApi.create(payload)
+      const newId = res?.id || res
+      if (newId) {
+        setPostId(newId)
+        setExistingPostStatus('draft')
+        createdDraftIdRef.current = newId
+        // Update URL bar seamlessly without unmounting, remounting, or reloading the component
+        window.history.replaceState(null, '', `/blog/edit/${newId}`)
+        setAutosaveStatus('saved')
+        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+        lastSavedPayloadRef.current = JSON.stringify({
+          title: payload.title,
+          subtitle: payload.seoDescription,
+          contentJson: payload.contentJson,
+          coverImage: payload.featuredImage,
+          labelName: payload.labelName,
+          slug: payload.slug || '',
+          seoTitle: payload.seoTitle,
+          seoDescription: payload.seoDescription,
+        })
+        return newId
+      }
+    } catch (err) {
+      console.error('Failed to initialize draft post:', err)
+      setAutosaveStatus('error')
+    } finally {
+      isCreatingDraftRef.current = false
+    }
+    return null
+  }
+
+  // Handle route change / mount: load existing post or create fresh draft
   useEffect(() => {
     let isMounted = true
-    if (id && getPost) {
-      getPost(id).then((existing) => {
+
+    if (routeId) {
+      if (createdDraftIdRef.current === routeId) {
+        createdDraftIdRef.current = null
+        return
+      }
+      setPostId(routeId)
+      postsApi.getById(routeId).then((existing) => {
         if (!isMounted || !existing) return
-        setTitle(existing.title || '')
-        if (existing.slug) {
+        if (existing.title) {
+          setTitle(existing.title)
+          if (!existing.seo_title && !existing.seoTitle) {
+            setSeoTitle(existing.title)
+          }
+          setSlug(generateSlug(existing.title))
+        } else if (existing.slug && !existing.slug.startsWith('draft-')) {
           setSlug(existing.slug)
-          setIsSlugEdited(true)
+        } else {
+          setSlug('')
+        }
+        if (existing.seo_title || existing.seoTitle) {
+          setSeoTitle(existing.seo_title || existing.seoTitle)
+          setIsSeoTitleEdited(true)
         }
         if (existing.status) {
           setStatus(existing.status)
+          setExistingPostStatus(existing.status)
         }
-        if (existing.excerpt || existing.seo_description) {
-          setSubtitle(existing.excerpt || existing.seo_description)
+        if (existing.excerpt || existing.seo_description || existing.seoDescription) {
+          const desc = existing.seo_description || existing.seoDescription || existing.excerpt
+          setSubtitle(desc)
           setShowSubtitleInput(true)
+          setSeoDescription(desc)
+          if (existing.seo_description || existing.seoDescription) {
+            setIsSeoDescriptionEdited(true)
+          }
         }
         if (existing.featured_image || existing.image) {
           const imgUrl = existing.featured_image || existing.image
@@ -119,8 +216,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           const fname = imgUrl.split('/').pop().split('\\').pop()
           setCoverFilename(fname)
         }
-        if (existing.category || existing.category_name) {
-          setTags([existing.category || existing.category_name])
+        const existingLabel = existing.label_name || existing.labelName || existing.category || existing.category_name
+        if (existingLabel && typeof existingLabel === 'string' && existingLabel.trim()) {
+          setLabelName(existingLabel.trim())
+        } else {
+          setLabelName('')
         }
         const content = existing.content_json || existing.contentJson
         if (content && typeof content === 'object' && content.type === 'doc') {
@@ -133,21 +233,99 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             }
           } catch {}
         }
+        lastSavedPayloadRef.current = JSON.stringify({
+          title: existing.title || '',
+          subtitle: existing.seo_description || existing.excerpt || '',
+          contentJson: content,
+          coverImage: existing.featured_image || existing.image || '',
+          labelName: existingLabel || '',
+          slug: existing.slug || '',
+          seoTitle: existing.seo_title || existing.title || '',
+          seoDescription: existing.seo_description || existing.excerpt || '',
+        })
+        hasUserInteractedRef.current = false
+      }).catch((err) => {
+        console.error('Failed to load post by ID:', err)
       })
+    } else {
+      // Writing a new blog: initialize state and generate a fresh draft ID
+      setPostId(null)
+      setExistingPostStatus('draft')
+      setTitle('')
+      setSlug('')
+      setSubtitle('')
+      setShowSubtitleInput(false)
+      setCoverImage('')
+      setCoverFilename('')
+      setShowCoverInput(false)
+      setLabelName('')
+      setSeoTitle('')
+      setIsSeoTitleEdited(false)
+      setSeoDescription('')
+      setIsSeoDescriptionEdited(false)
+      setEditorJson({ type: 'doc', content: [{ type: 'paragraph' }] })
+      setStatus('published')
+      hasUserInteractedRef.current = false
+      lastSavedPayloadRef.current = ''
     }
+
     return () => {
       isMounted = false
     }
-  }, [id, getPost])
+  }, [routeId])
 
-  // Title change handler with automatic title-based URL slug generation
+  // Debounced Autosave (PATCH /api/posts/:id) on every user edit
+  useEffect(() => {
+    if (!hasUserInteractedRef.current || !postId) return
+
+    const currentPayload = {
+      title: title || '',
+      slug: (title && title.trim()) ? generateSlug(title.trim()) : undefined,
+      contentJson: editorJson,
+      featuredImage: coverImage || null,
+      labelName: (labelName && labelName.trim()) ? labelName.trim() : null,
+      seoTitle: (seoTitle && seoTitle.trim()) ? seoTitle.trim() : (title || null),
+      seoDescription: (seoDescription && seoDescription.trim()) ? seoDescription.trim() : (subtitle || null),
+      status: existingPostStatus === 'published' ? 'published' : 'draft',
+    }
+
+    const payloadStr = JSON.stringify(currentPayload)
+    if (payloadStr === lastSavedPayloadRef.current) return
+
+    setAutosaveStatus('saving')
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+
+    autosaveTimerRef.current = setTimeout(async () => {
+      try {
+        await postsApi.patch(postId, currentPayload)
+        lastSavedPayloadRef.current = payloadStr
+        setAutosaveStatus('saved')
+        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      } catch (err) {
+        console.error('Autosave patch failed:', err)
+        setAutosaveStatus('error')
+      }
+    }, 1000)
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    }
+  }, [title, subtitle, editorJson, coverImage, labelName, slug, seoTitle, seoDescription, postId, existingPostStatus])
+
+  // Title change handler with automatic title-based URL slug and SEO Title generation
   const handleTitleChange = (e) => {
+    hasUserInteractedRef.current = true
     const val = e.target.value
     setTitle(val)
-    if (!isSlugEdited) {
-      setSlug(generateSlug(val))
+    const autoSlug = generateSlug(val)
+    setSlug(autoSlug)
+    if (!isSeoTitleEdited) {
+      setSeoTitle(val)
     }
     if (errorMessage) setErrorMessage('')
+    if (!postId && !isCreatingDraftRef.current) {
+      ensureDraftId({ title: val, slug: autoSlug })
+    }
   }
 
   // Calculate word count & reading time
@@ -204,9 +382,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         const fileUrl = res.file?.url || res.file?.path
         const filename = res.file?.filename
         if (fileUrl) {
+          hasUserInteractedRef.current = true
           setCoverImage(fileUrl)
           setCoverFilename(filename || fileUrl.split('/').pop().split('\\').pop())
           setShowCoverInput(false)
+          if (!postId && !isCreatingDraftRef.current) {
+            ensureDraftId({ featuredImage: fileUrl })
+          }
         }
       } catch (err) {
         console.error('Failed to upload cover image:', err)
@@ -220,6 +402,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
   // Cover Image remove with backend /api/upload/:filename deletion
   const handleRemoveCoverImage = async () => {
+    hasUserInteractedRef.current = true
     if (coverFilename || (coverImage && coverImage.includes('/uploads/'))) {
       const filename = coverFilename || coverImage.split('/').pop().split('\\').pop()
       try {
@@ -258,50 +441,61 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       return
     }
 
-    // 5. Category is compulsory
-    if (!tags[0] || !tags[0].trim()) {
-      setErrorMessage('Category is compulsory. Please select a category for your article.')
-      return
-    }
-
-    // 6. Permalink (URL Slug) is compulsory
-    const cleanSlug = (slug && slug.trim()) ? generateSlug(slug) : generateSlug(title.trim())
-    if (!cleanSlug) {
-      setErrorMessage('Permalink (URL slug) is compulsory. Please enter a valid URL slug.')
-      return
-    }
-
-    // 7. Status is compulsory
-    if (!status) {
-      setErrorMessage('Publication status is compulsory. Please select Published or Draft.')
+    // 5. Label name is compulsory
+    if (!labelName || !labelName.trim()) {
+      setErrorMessage('Label Name is compulsory. Please enter a label name for your article.')
       return
     }
 
     const cleanTitle = title.trim()
-    const finalSlug = cleanSlug
+    const finalSlug = generateSlug(cleanTitle) || 'article'
+    const finalLabelName = labelName.trim()
+    const finalSeoTitle = (seoTitle && seoTitle.trim()) ? seoTitle.trim() : cleanTitle
+    const finalSeoDescription = (seoDescription && seoDescription.trim()) ? seoDescription.trim() : subtitle.trim()
 
     setErrorMessage('')
     setIsPublishing(true)
 
-    const postPayload = {
-      title: cleanTitle,
-      slug: finalSlug,
-      contentJson: editorJson,
-      featuredImage: coverImage,
-      categoryName: tags[0].trim(),
-      status: status || 'published',
-      seoTitle: cleanTitle,
-      seoDescription: subtitle.trim(),
-    }
+    // Clear any pending autosave debounce timer
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
 
     try {
-      if (id && updatePost) {
-        await updatePost(id, postPayload)
-      } else if (addPost) {
-        await addPost(postPayload)
+      let targetId = postId
+      if (!targetId) {
+        targetId = await ensureDraftId({
+          title: cleanTitle,
+          slug: finalSlug,
+          contentJson: editorJson,
+          featuredImage: coverImage,
+          labelName: finalLabelName,
+          seoTitle: finalSeoTitle,
+          seoDescription: finalSeoDescription,
+        })
       }
+
+      const postPayload = {
+        title: cleanTitle,
+        slug: finalSlug,
+        contentJson: editorJson,
+        featuredImage: coverImage,
+        labelName: finalLabelName,
+        seoTitle: finalSeoTitle,
+        seoDescription: finalSeoDescription,
+        status: 'published',
+      }
+
+      // Publish article using POST /api/posts/:id/publish
+      await postsApi.publish(targetId, postPayload)
+      if (publishPost) {
+        publishPost(targetId, postPayload).catch(() => {})
+      }
+
+      setAutosaveStatus('saved')
+      setStatus('published')
+      setExistingPostStatus('published')
       setIsPublishSuccess(true)
       setIsPublishDrawerOpen(false)
+
       setTimeout(() => {
         setIsPublishSuccess(false)
         if (onBackToDashboard) {
@@ -311,10 +505,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         }
       }, 1200)
     } catch (err) {
-      console.error('Failed to save post:', err)
-      let msg = err.data?.error || err.message || 'Failed to save blog post.'
-      if (msg.toLowerCase().includes('duplicate slug')) {
-        msg = `A post with the URL slug "${finalSlug}" already exists. Please modify the URL slug below.`
+      console.error('Failed to save/publish post:', err)
+      let msg = err.data?.message || err.data?.error || err.message || 'Failed to save blog post.'
+      if (msg.toLowerCase().includes('duplicate slug') || msg.toLowerCase().includes('already exists')) {
+        msg = `A post with the URL slug "${finalSlug}" already exists.`
       }
       setErrorMessage(msg)
     } finally {
@@ -322,16 +516,58 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     }
   }
 
-  const handleOpenPublishDrawer = () => {
-    if (!hasBlogContent) {
-      setErrorMessage('Please write your blog content before publishing.')
-      return
+  // Clicking the top "Publish Article" button calls PATCH /api/posts/:id and opens the off-side popup
+  const handleOpenPublishDrawer = async () => {
+    const autoSlug = title.trim() ? generateSlug(title.trim()) : ''
+    setSlug(autoSlug)
+    if (!seoTitle && title.trim()) {
+      setSeoTitle(title.trim())
     }
-    if (!slug && title.trim()) {
-      setSlug(generateSlug(title))
+    if (!seoDescription && subtitle.trim()) {
+      setSeoDescription(subtitle.trim())
     }
     setErrorMessage('')
-    setIsPublishDrawerOpen(true)
+
+    try {
+      setIsOpeningDrawer(true)
+      const currentLabelName = (labelName && labelName.trim()) ? labelName.trim() : null
+      let targetId = postId
+      if (!targetId) {
+        targetId = await ensureDraftId({
+          title: title || '',
+          slug: autoSlug || undefined,
+          contentJson: editorJson,
+          featuredImage: coverImage || null,
+          labelName: currentLabelName,
+          seoTitle: seoTitle || title || null,
+          seoDescription: seoDescription || subtitle || null,
+        })
+      }
+
+      if (targetId) {
+        setAutosaveStatus('saving')
+        const patchPayload = {
+          title: title || '',
+          slug: autoSlug || undefined,
+          contentJson: editorJson,
+          featuredImage: coverImage || null,
+          labelName: currentLabelName,
+          seoTitle: (seoTitle && seoTitle.trim()) ? seoTitle.trim() : (title || null),
+          seoDescription: (seoDescription && seoDescription.trim()) ? seoDescription.trim() : (subtitle || null),
+          status: existingPostStatus === 'published' ? 'published' : 'draft',
+        }
+        await postsApi.patch(targetId, patchPayload)
+        lastSavedPayloadRef.current = JSON.stringify(patchPayload)
+        setAutosaveStatus('saved')
+        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      }
+    } catch (err) {
+      console.error('Failed to patch post before opening drawer:', err)
+      setAutosaveStatus('error')
+    } finally {
+      setIsOpeningDrawer(false)
+      setIsPublishDrawerOpen(true)
+    }
   }
 
   return (
@@ -449,10 +685,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             )}
           </div>
 
-          {/* Write New Blog (Active) */}
+          {/* Write New Blog */}
           <div className="relative group flex justify-center">
-            <div
-              className={`transition-all duration-200 cursor-default ${
+            <Link
+              to="/blog/create"
+              className={`transition-all duration-200 cursor-pointer ${
                 isSidebarExpanded
                   ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium text-[#8F3EC9] bg-purple-50/80 border border-purple-200/80 shadow-[0_2px_8px_rgba(143,62,201,0.06)]'
                   : 'w-10 h-10 flex items-center justify-center rounded-lg text-[#8F3EC9] bg-purple-50/80 border border-purple-200/80 shadow-[0_2px_8px_rgba(143,62,201,0.06)] p-0'
@@ -466,7 +703,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   Write New Blog
                 </span>
               )}
-            </div>
+            </Link>
             {!isSidebarExpanded && (
               <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900 text-white text-[11px] font-medium rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
                 Write New Blog
@@ -587,6 +824,31 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             <span>Back to Blogs</span>
           </button>
 
+          {/* Center Autosave Status Indicator */}
+          <div className="flex items-center gap-2">
+            {autosaveStatus === 'saving' && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium select-none animate-pulse">
+                <svg className="w-3.5 h-3.5 animate-spin text-[#8F3EC9]" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>Saving draft...</span>
+              </div>
+            )}
+            {autosaveStatus === 'saved' && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium select-none">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Saved{lastSavedTime ? ` · ${lastSavedTime}` : ''}</span>
+              </div>
+            )}
+            {autosaveStatus === 'error' && (
+              <div className="flex items-center gap-1.5 text-xs text-rose-500 font-medium select-none" title="Autosave error - will retry on next edit">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>Save failed</span>
+              </div>
+            )}
+          </div>
+
           {/* Right Action Controls */}
           <div className="flex items-center space-x-3">
             {/* Preview Toggle */}
@@ -612,15 +874,27 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               )}
             </button>
 
-            {/* Publish / Save Primary Button - Opens Right-Side Drawer */}
+            {/* Publish Article Button - Calls PATCH /api/posts/{id} and Opens Right-Side Drawer */}
             <button
               type="button"
               onClick={handleOpenPublishDrawer}
-              disabled={isPublishing}
+              disabled={isPublishing || isOpeningDrawer}
               className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>{id ? 'Save Changes' : 'Publish Article'}</span>
+              {isOpeningDrawer ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Publish Article</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -648,8 +922,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white px-5 py-3 rounded-xl shadow-2xl border border-zinc-800 flex items-center space-x-3 animate-in slide-in-from-bottom-5">
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             <div>
-              <p className="text-xs font-semibold">{id ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
-              <p className="text-[11px] text-zinc-400">{id ? 'Changes saved to database' : 'Article created and published via API'}</p>
+              <p className="text-xs font-semibold">{existingPostStatus === 'published' ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
+              <p className="text-[11px] text-zinc-400">{existingPostStatus === 'published' ? 'Changes saved to database' : 'Article created and published via API'}</p>
             </div>
           </div>
         )}
@@ -757,15 +1031,29 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   rows={1}
                   autoFocus={showSubtitleInput && !subtitle}
                   value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value)}
+                  onChange={(e) => {
+                    hasUserInteractedRef.current = true
+                    const val = e.target.value
+                    setSubtitle(val)
+                    if (!isSeoDescriptionEdited) {
+                      setSeoDescription(val)
+                    }
+                    if (!postId && !isCreatingDraftRef.current) {
+                      ensureDraftId({ seoDescription: val })
+                    }
+                  }}
                   placeholder="Write a subtitle or brief summary..."
                   className="w-full font-medium-sans italic text-lg sm:text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent pr-8 resize-none overflow-hidden leading-relaxed block"
                 />
                 <button
                   type="button"
                   onClick={() => {
+                    hasUserInteractedRef.current = true
                     setSubtitle('')
                     setShowSubtitleInput(false)
+                    if (!isSeoDescriptionEdited) {
+                      setSeoDescription('')
+                    }
                   }}
                   className="absolute right-0 top-1 text-slate-700 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                   title="Remove Subtitle"
@@ -782,9 +1070,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             <div>
               <MediumEditor
                 onJsonUpdate={(json) => {
+                  hasUserInteractedRef.current = true
                   setEditorJson(json)
                   if (errorMessage && errorMessage.toLowerCase().includes('blog content')) {
                     setErrorMessage('')
+                  }
+                  if (!postId && !isCreatingDraftRef.current) {
+                    ensureDraftId({ contentJson: json })
                   }
                 }}
                 initialContent={editorJson}
@@ -814,7 +1106,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   <div>
                     <h5 className="text-sm font-semibold text-zinc-900">Energy Autonomy</h5>
                     <p className="text-xs text-zinc-500">
-                      {status === 'published' ? 'Published' : 'Draft'} • {readingTime} min read
+                      {existingPostStatus === 'published' ? 'Published' : 'Draft'} • {readingTime} min read
                     </p>
                   </div>
                 </div>
@@ -872,7 +1164,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                    {id ? 'Review & Update Post' : 'Publish Article'}
+                    {existingPostStatus === 'published' ? 'Review & Update Post' : 'Publish Article'}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                     <span>All fields marked with</span>
@@ -1002,7 +1294,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                       rows={2}
                       value={subtitle}
                       onChange={(e) => {
-                        setSubtitle(e.target.value)
+                        const val = e.target.value
+                        setSubtitle(val)
+                        if (!isSeoDescriptionEdited) {
+                          setSeoDescription(val)
+                        }
                         if (errorMessage) setErrorMessage('')
                       }}
                       placeholder="Write a brief subtitle or summary for readers..."
@@ -1015,116 +1311,115 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
                 <div className="border-t border-slate-100" />
 
-                {/* --- Section 2: Publishing Settings (Category, Permalink, Status) --- */}
+                {/* --- Section 2: Label Settings --- */}
                 <div className="space-y-4">
                   <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <LinkIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                    Publishing Settings
+                    <Bookmark className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                    Label Settings
                   </h4>
 
-                  {/* Category Selection */}
+                  {/* Label Name Input */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Category <span className="text-rose-500 font-bold">*</span>
+                      Label Name <span className="text-rose-500 font-bold">*</span>
                     </label>
-                    <select
-                      value={tags[0] || 'ENERGY & AWARENESS'}
+                    <input
+                      type="text"
+                      value={labelName}
                       onChange={(e) => {
-                        setTags([e.target.value])
+                        setLabelName(e.target.value)
                         if (errorMessage) setErrorMessage('')
                       }}
-                      className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none cursor-pointer"
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Enter label name (e.g. ENERGY & AWARENESS)..."
+                      className={`w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-xl border ${
+                        !labelName.trim() && errorMessage.toLowerCase().includes('label')
+                          ? 'border-rose-400 ring-1 ring-rose-300'
+                          : 'border-slate-200'
+                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all`}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      The primary topic label displayed on the article card and page.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* --- Section 3: SEO Settings (SEO Title, SEO Description) --- */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-[#8F3EC9]" />
+                      SEO Settings
+                    </h4>
+                    {(isSeoTitleEdited || isSeoDescriptionEdited) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSeoTitleEdited(false)
+                          setIsSeoDescriptionEdited(false)
+                          setSeoTitle(title)
+                          setSeoDescription(subtitle)
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
+                        title="Reset SEO fields to match title and subtitle"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset SEO</span>
+                      </button>
+                    )}
                   </div>
 
-                  {/* Permalink / URL Slug */}
+                  {/* SEO Title Input */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-semibold text-slate-700">
-                        Permalink (URL Slug) <span className="text-rose-500 font-bold">*</span>
+                        SEO Title <span className="text-rose-500 font-bold">*</span>
                       </label>
-                      {isSlugEdited && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsSlugEdited(false)
-                            setSlug(generateSlug(title))
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
-                          title="Reset slug from title"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Reset</span>
-                        </button>
-                      )}
-                    </div>
-                    <div className={`flex items-center rounded-xl border ${
-                      !slug.trim() && errorMessage.toLowerCase().includes('permalink') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                    } bg-white px-3.5 py-2.5 focus-within:border-[#8F3EC9] focus-within:ring-1 focus-within:ring-[#8F3EC9] transition-all`}>
-                      <span className="text-xs font-medium text-slate-400 select-none shrink-0 pr-1">
-                        /blog/view/
+                      <span className={`text-[10px] ${seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                        {seoTitle.length}/60 chars
                       </span>
-                      <input
-                        type="text"
-                        value={slug}
-                        onChange={(e) => {
-                          setSlug(generateSlug(e.target.value))
-                          setIsSlugEdited(true)
-                          if (errorMessage) setErrorMessage('')
-                        }}
-                        placeholder="article-url-slug"
-                        className="flex-1 bg-transparent text-xs font-semibold text-[#8F3EC9] outline-none"
-                      />
                     </div>
+                    <input
+                      type="text"
+                      value={seoTitle}
+                      onChange={(e) => {
+                        setSeoTitle(e.target.value)
+                        setIsSeoTitleEdited(true)
+                        if (errorMessage) setErrorMessage('')
+                      }}
+                      placeholder="Enter SEO meta title..."
+                      className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-900 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all"
+                    />
                     <p className="text-[11px] text-slate-400 mt-1">
-                      The permanent web link for readers to access this story.
+                      Title tag displayed in search engine results and browser tabs.
                     </p>
                   </div>
 
-                  {/* Status Selection */}
+                  {/* SEO Description Input */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Status <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setStatus('published')}
-                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          status === 'published'
-                            ? 'border-emerald-500 bg-emerald-50/70 text-emerald-800 ring-1 ring-emerald-500'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                        <div className="text-left">
-                          <div className="leading-tight">Published</div>
-                          <div className="text-[10px] font-normal text-slate-500">Live for all readers</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setStatus('draft')}
-                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                          status === 'draft'
-                            ? 'border-amber-500 bg-amber-50/70 text-amber-800 ring-1 ring-amber-500'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                        <div className="text-left">
-                          <div className="leading-tight">Draft</div>
-                          <div className="text-[10px] font-normal text-slate-500">Keep in preparation</div>
-                        </div>
-                      </button>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        SEO Description <span className="text-rose-500 font-bold">*</span>
+                      </label>
+                      <span className={`text-[10px] ${seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                        {seoDescription.length}/160 chars
+                      </span>
                     </div>
+                    <textarea
+                      rows={2}
+                      value={seoDescription}
+                      onChange={(e) => {
+                        setSeoDescription(e.target.value)
+                        setIsSeoDescriptionEdited(true)
+                        if (errorMessage) setErrorMessage('')
+                      }}
+                      placeholder="Enter SEO meta description..."
+                      className="w-full px-3.5 py-2 text-xs text-slate-700 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Summary snippet displayed beneath your page title in Google search results.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1151,12 +1446,12 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                         <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span>Saving to Database...</span>
+                      <span>Publishing to Live Blog...</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>{status === 'published' ? (id ? 'Save & Update Now' : 'Publish Article Now') : 'Save as Draft'}</span>
+                      <span>{existingPostStatus === 'published' ? 'Update & Publish Article' : 'Post & Publish Article'}</span>
                     </>
                   )}
                 </button>

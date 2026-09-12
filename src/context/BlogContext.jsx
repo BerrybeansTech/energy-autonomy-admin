@@ -56,10 +56,11 @@ export function normalizePost(raw) {
   return {
     ...raw,
     id: raw.id,
-    title: raw.title || 'Untitled Blog Post',
+    title: raw.title || '',
     slug: raw.slug || '',
-    category: raw.category_name || raw.categoryName || raw.category || 'General',
-    categoryName: raw.category_name || raw.categoryName || raw.category || 'General',
+    category: raw.label_name || raw.category_name || raw.categoryName || raw.category || '',
+    categoryName: raw.label_name || raw.category_name || raw.categoryName || raw.category || '',
+    label_name: raw.label_name || raw.category_name || raw.categoryName || raw.category || null,
     status: raw.status || 'draft',
     image: raw.featured_image || raw.featuredImage || raw.image || '',
     featuredImage: raw.featured_image || raw.featuredImage || raw.image || '',
@@ -72,7 +73,9 @@ export function normalizePost(raw) {
     publishedAt: publishedAt,
     createdAt: raw.created_at || raw.createdAt || '',
     updatedAt: raw.updated_at || raw.updatedAt || '',
-    tags: raw.tags || (raw.category_name ? [raw.category_name] : ['Energy Autonomy']),
+    tags: raw.tags || (raw.label_name ? [raw.label_name] : (raw.category_name ? [raw.category_name] : [])),
+    seoTitle: raw.seo_title || raw.seoTitle || '',
+    seoDescription: raw.seo_description || raw.seoDescription || '',
   };
 }
 
@@ -147,25 +150,32 @@ export const BlogProvider = ({ children }) => {
   }, []);
 
   /**
-   * Add / Create new post via API
+   * Add / Create new post or draft via API (POST /api/posts)
    */
-  const addPost = async (postData) => {
+  const addPost = async (postData = {}) => {
     try {
       const payload = {
-        title: postData.title,
-        slug: postData.slug,
+        title: postData.title || '',
+        slug: postData.slug || undefined,
         contentJson: postData.contentJson || postData.content_json || postData.content,
         featuredImage: postData.featuredImage || postData.image || null,
-        categoryName: postData.categoryName || postData.category || null,
+        labelName: postData.labelName || postData.label || postData.categoryName || postData.category || null,
         status: postData.status || 'draft',
         seoTitle: postData.seoTitle || postData.title || null,
         seoDescription: postData.seoDescription || postData.excerpt || null,
       };
 
-      const createdRaw = await postsApi.create(payload);
-      const normalized = normalizePost(createdRaw);
-      setPosts((prev) => [normalized, ...prev.filter((p) => p.id !== normalized.id)]);
-      return normalized;
+      const createdRes = await postsApi.create(payload);
+      const newId = createdRes?.id || createdRes;
+      let fullPost = null;
+      try {
+        const raw = await postsApi.getById(newId);
+        fullPost = normalizePost(raw);
+      } catch {
+        fullPost = normalizePost({ id: newId, ...payload });
+      }
+      setPosts((prev) => [fullPost, ...prev.filter((p) => String(p.id) !== String(fullPost.id))]);
+      return fullPost;
     } catch (err) {
       console.error('Failed to create post via API:', err);
       throw err;
@@ -173,7 +183,7 @@ export const BlogProvider = ({ children }) => {
   };
 
   /**
-   * Update existing post via API
+   * Update existing post via API (PUT /api/posts/:id)
    */
   const updatePost = async (id, updates) => {
     try {
@@ -182,7 +192,7 @@ export const BlogProvider = ({ children }) => {
         slug: updates.slug,
         contentJson: updates.contentJson || updates.content_json || updates.content,
         featuredImage: updates.featuredImage !== undefined ? updates.featuredImage : updates.image,
-        categoryName: updates.categoryName !== undefined ? updates.categoryName : updates.category,
+        labelName: updates.labelName !== undefined ? updates.labelName : (updates.label !== undefined ? updates.label : (updates.categoryName !== undefined ? updates.categoryName : updates.category)),
         status: updates.status,
         seoTitle: updates.seoTitle !== undefined ? updates.seoTitle : updates.title,
         seoDescription: updates.seoDescription !== undefined ? updates.seoDescription : updates.excerpt,
@@ -196,6 +206,48 @@ export const BlogProvider = ({ children }) => {
       return normalized;
     } catch (err) {
       console.error(`Failed to update post ${id} via API:`, err);
+      throw err;
+    }
+  };
+
+  /**
+   * Autosave / Partial update post via API (PATCH /api/posts/:id)
+   */
+  const patchPost = async (id, partialUpdates) => {
+    try {
+      const updatedRaw = await postsApi.patch(id, partialUpdates);
+      const normalized = normalizePost(updatedRaw);
+      setPosts((prev) => {
+        const exists = prev.some((p) => String(p.id) === String(id));
+        if (exists) {
+          return prev.map((p) => (String(p.id) === String(id) ? normalized : p));
+        }
+        return [normalized, ...prev];
+      });
+      return normalized;
+    } catch (err) {
+      console.error(`Failed to patch post ${id} via API:`, err);
+      throw err;
+    }
+  };
+
+  /**
+   * Publish post via API (POST /api/posts/:id/publish)
+   */
+  const publishPost = async (id, publishPayload) => {
+    try {
+      const publishedRaw = await postsApi.publish(id, publishPayload);
+      const normalized = normalizePost(publishedRaw);
+      setPosts((prev) => {
+        const exists = prev.some((p) => String(p.id) === String(id));
+        if (exists) {
+          return prev.map((p) => (String(p.id) === String(id) ? normalized : p));
+        }
+        return [normalized, ...prev];
+      });
+      return normalized;
+    } catch (err) {
+      console.error(`Failed to publish post ${id} via API:`, err);
       throw err;
     }
   };
@@ -242,6 +294,8 @@ export const BlogProvider = ({ children }) => {
         addPost,
         createPost: addPost,
         updatePost,
+        patchPost,
+        publishPost,
         updateStatus,
         deletePost,
       }}

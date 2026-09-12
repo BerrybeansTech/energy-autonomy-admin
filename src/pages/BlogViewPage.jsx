@@ -85,6 +85,12 @@ function renderTiptapNode(node, index) {
         </div>
       );
     }
+    case 'codeBlock':
+      return (
+        <pre key={index} className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-sm overflow-x-auto my-4 leading-relaxed">
+          <code>{node.content?.map((child, i) => renderTiptapNode(child, i))}</code>
+        </pre>
+      );
     case 'horizontalRule':
       return <hr key={index} className="my-6 border-slate-200" />;
     case 'text': {
@@ -95,6 +101,10 @@ function renderTiptapNode(node, index) {
             content = <strong key="b" className="font-bold text-slate-900">{content}</strong>;
           } else if (mark.type === 'italic') {
             content = <em key="i" className="italic">{content}</em>;
+          } else if (mark.type === 'strike') {
+            content = <del key="s" className="line-through text-slate-500">{content}</del>;
+          } else if (mark.type === 'code') {
+            content = <code key="code" className="bg-slate-100 text-[#8F3EC9] px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono">{content}</code>;
           } else if (mark.type === 'link') {
             content = (
               <a
@@ -110,7 +120,8 @@ function renderTiptapNode(node, index) {
           } else if (mark.type === 'textStyle' && mark.attrs?.color) {
             content = <span key="color" style={{ color: mark.attrs.color }}>{content}</span>;
           } else if (mark.type === 'highlight') {
-            content = <mark key="mark" className="bg-yellow-100 px-1 rounded">{content}</mark>;
+            const color = mark.attrs?.color || '#fef08a';
+            content = <mark key="mark" style={{ backgroundColor: color }} className="px-1 py-0.5 rounded">{content}</mark>;
           }
         });
       }
@@ -337,11 +348,13 @@ const BlogViewPage = () => {
                 className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-              <div className="absolute top-3.5 left-3.5">
-                <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-xs">
-                  {post.category || 'General'}
-                </span>
-              </div>
+              {(post.category || post.categoryName || post.label_name) && (
+                <div className="absolute top-3.5 left-3.5">
+                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-xs">
+                    {post.label_name || post.categoryName || post.category}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -399,7 +412,8 @@ const BlogViewPage = () => {
               {[
                 { label: 'Live Status', value: post.status, isStatus: true },
                 { label: 'URL Slug', value: post.slug || '—', isSlug: true },
-                { label: 'Category', value: post.category || 'General', isCategory: true },
+                { label: 'Label Name', value: post.label_name || post.labelName || post.categoryName || post.category || '—', isCategory: true },
+                { label: 'SEO Title', value: post.seoTitle || post.seo_title || post.title || '—' },
                 { label: 'Published Date', value: post.publishedAt || 'Not published yet' },
                 { label: 'Read Time', value: post.readTime || post.readingTime || '1 min read' },
               ].map((item, i) => (
