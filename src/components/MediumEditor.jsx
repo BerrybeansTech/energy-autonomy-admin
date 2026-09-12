@@ -51,7 +51,7 @@ const HIGHLIGHT_PRESETS = [
   { name: 'Soft Rose', color: '#fbcfe8' },
 ]
 
-const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
+const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialContent, editable = true }) => {
   // Popover menus state
   const [showStyleDropdown, setShowStyleDropdown] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
@@ -74,6 +74,36 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
   const colorMenuRef = useRef(null)
   const highlightMenuRef = useRef(null)
 
+  // Height & Cursor tracking for visual line-wrapping detection
+  const prevHeightRef = useRef(0)
+  const prevCursorYRef = useRef(0)
+  const lineWrapTimeoutRef = useRef(null)
+
+  // Calculates true rendered height of all content blocks (paragraphs/headings),
+  // bypassing any CSS min-height on the parent .ProseMirror container.
+  const getActualContentHeight = (dom) => {
+    if (!dom || !dom.children) return 0
+    let total = 0
+    for (let i = 0; i < dom.children.length; i++) {
+      total += dom.children[i].offsetHeight || 0
+    }
+    return total
+  }
+
+  // Calculates cursor's Y-coordinate relative to the editor container
+  const getCursorYInEditor = (ed, dom) => {
+    try {
+      if (!ed?.view || ed.isDestroyed || !dom) return null
+      const { selection } = ed.state
+      const coords = ed.view.coordsAtPos(selection.head)
+      if (!coords) return null
+      const domRect = dom.getBoundingClientRect()
+      return coords.top - domRect.top
+    } catch {
+      return null
+    }
+  }
+
   // Close popovers on click outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -88,7 +118,10 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      if (lineWrapTimeoutRef.current) clearTimeout(lineWrapTimeoutRef.current)
+    }
   }, [])
 
   const editor = useEditor({
@@ -133,13 +166,60 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
             .replace(/line-height\s*:[^;]+;?/gi, '')
         })
       },
+      handleKeyDown(view, event) {
+        if (event.key === 'Enter') {
+          // Enter creates a new line block - notify onLineWrap shortly after schema updates
+          if (lineWrapTimeoutRef.current) clearTimeout(lineWrapTimeoutRef.current)
+          lineWrapTimeoutRef.current = setTimeout(() => {
+            if (onLineWrap && editor) {
+              onLineWrap(editor.getJSON())
+            }
+          }, 60)
+        }
+        return false
+      },
     },
     content: initialContent || '<p></p>',
     onUpdate: ({ editor }) => {
+      const json = editor.getJSON()
       if (onJsonUpdate) {
-        onJsonUpdate(editor.getJSON())
+        onJsonUpdate(json)
       }
       setSelectionTick((t) => t + 1)
+
+      // Visual line wrap detection: only when user is actively focused in editor
+      if (!editor?.isFocused) return
+
+      const dom = editor?.view?.dom
+      if (dom) {
+        const currentContentHeight = getActualContentHeight(dom)
+        const cursorY = getCursorYInEditor(editor, dom)
+
+        // Initialize baselines on initial load / first stroke
+        if (prevHeightRef.current === 0 && currentContentHeight > 0) {
+          prevHeightRef.current = currentContentHeight
+        }
+        if (prevCursorYRef.current === 0 && cursorY !== null) {
+          prevCursorYRef.current = cursorY
+        }
+
+        // 1. Check if rendered paragraph/block height expanded (e.g. text wrapped to line below)
+        const heightIncreased = prevHeightRef.current > 0 && currentContentHeight > prevHeightRef.current + 5
+
+        // 2. Check if cursor dropped down to a new visual line below (cursor jumped down by >= 15px)
+        const cursorDropped = cursorY !== null && prevCursorYRef.current > 0 && (cursorY - prevCursorYRef.current) >= 15
+
+        if (heightIncreased || cursorDropped) {
+          if (onLineWrap) {
+            onLineWrap(json)
+          }
+        }
+
+        prevHeightRef.current = currentContentHeight
+        if (cursorY !== null) {
+          prevCursorYRef.current = cursorY
+        }
+      }
     },
     onSelectionUpdate: () => {
       setSelectionTick((t) => t + 1)
@@ -149,26 +229,42 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
     },
     onFocus: () => {
       setSelectionTick((t) => t + 1)
+      if (onEditorInteraction) {
+        onEditorInteraction()
+      }
     },
     onBlur: () => {
       setSelectionTick((t) => t + 1)
     },
   })
 
-  // Sync initialContent when prefilled in Edit Mode
+  // Sync initialContent when prefilled in Edit Mode and initialize height baseline
   useEffect(() => {
     if (editor && initialContent) {
       try {
         const currentJson = JSON.stringify(editor.getJSON())
         const nextJson = JSON.stringify(initialContent)
         if (currentJson !== nextJson && !editor.isFocused) {
-          editor.commands.setContent(initialContent)
+          editor.commands.setContent(initialContent, false)
+          setTimeout(() => {
+            if (editor?.view?.dom) {
+              prevHeightRef.current = getActualContentHeight(editor.view.dom)
+              prevCursorYRef.current = getCursorYInEditor(editor, editor.view.dom) || 0
+            }
+          }, 100)
         }
       } catch (err) {
         // fallback
       }
     }
   }, [editor, initialContent])
+
+  useEffect(() => {
+    if (editor?.view?.dom) {
+      prevHeightRef.current = getActualContentHeight(editor.view.dom)
+      prevCursorYRef.current = getCursorYInEditor(editor, editor.view.dom) || 0
+    }
+  }, [editor])
 
   useEffect(() => {
     if (editor) {
@@ -181,6 +277,9 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
   // Universal Command Runner: works whether text is selected or cursor is idle for typing
   const executeCommand = (commandFn) => {
     if (!editor) return
+    if (onEditorInteraction) {
+      onEditorInteraction()
+    }
     if (!editor.isFocused) {
       editor.commands.focus()
     }
@@ -226,6 +325,9 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
   }
 
   const handleSetLink = () => {
+    if (onEditorInteraction) {
+      onEditorInteraction()
+    }
     if (!linkUrl) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
     } else {
@@ -237,6 +339,9 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
 
   const handleAddImageFromUrl = () => {
     if (imageUrl) {
+      if (onEditorInteraction) {
+        onEditorInteraction()
+      }
       editor.chain().focus().setImage({ src: imageUrl }).run()
       setImageUrl('')
       setShowImageModal(false)
@@ -246,6 +351,9 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
+      if (onEditorInteraction) {
+        onEditorInteraction()
+      }
       setUploadingImage(true)
       try {
         const res = await uploadApi.upload(file)
@@ -270,7 +378,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
       {/* ROUNDED TOP TOOLBAR (Substack-Style, Admin Panel Native)      */}
       {/* ------------------------------------------------------------- */}
       {editable && (
-        <div className="w-full pb-3.5 mb-5 border-b border-slate-200 flex items-center gap-1 sm:gap-1.5 flex-wrap relative z-30">
+        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md py-2.5 mb-5 border-b border-slate-200 flex items-center gap-1 sm:gap-1.5 flex-wrap shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
               {/* 1. History: Undo & Redo */}
               <button
@@ -278,14 +386,14 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={!editor.can().undo()}
                 onClick={() => executeCommand((chain) => chain.undo().run())}
-                className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.can().undo()
                     ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                     : 'text-slate-300 cursor-not-allowed'
                 }`}
                 title="Undo (Ctrl+Z)"
               >
-                <Undo className="w-4 h-4" />
+                <Undo className="w-[18px] h-[18px]" />
               </button>
 
               <button
@@ -293,17 +401,17 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={!editor.can().redo()}
                 onClick={() => executeCommand((chain) => chain.redo().run())}
-                className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.can().redo()
                     ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                     : 'text-slate-300 cursor-not-allowed'
                 }`}
                 title="Redo (Ctrl+Y)"
               >
-                <Redo className="w-4 h-4" />
+                <Redo className="w-[18px] h-[18px]" />
               </button>
 
-              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+              <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
 
               {/* 2. Style Dropdown */}
               <div className="relative" ref={styleMenuRef}>
@@ -315,7 +423,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                     setShowColorPicker(false)
                     setShowHighlightPicker(false)
                   }}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  className={`h-9 px-3 rounded-xl text-[13px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                     showStyleDropdown ||
                     editor.isActive('heading') ||
                     editor.isActive('blockquote') ||
@@ -326,7 +434,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                   title="Text Style"
                 >
                   <span>{getCurrentStyleLabel()}</span>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                  <ChevronDown className="w-4 h-4 opacity-70" />
                 </button>
 
                 {showStyleDropdown && (
@@ -416,7 +524,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 )}
               </div>
 
-              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+              <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
 
               {/* 3. Inline Typography Formatting */}
               {/* Bold (B) */}
@@ -424,7 +532,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBold().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-bold text-sm select-none ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-bold text-base select-none ${
                   editor.isActive('bold')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
@@ -439,7 +547,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleItalic().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer italic font-serif text-sm font-semibold select-none ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer italic font-serif text-base font-semibold select-none ${
                   editor.isActive('italic')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
@@ -454,7 +562,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleStrike().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer line-through text-sm font-semibold select-none ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer line-through text-base font-semibold select-none ${
                   editor.isActive('strike')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
@@ -469,7 +577,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleCode().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-mono text-xs font-bold select-none ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-mono text-[13px] font-bold select-none ${
                   editor.isActive('code')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
@@ -489,16 +597,16 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                     setShowStyleDropdown(false)
                     setShowHighlightPicker(false)
                   }}
-                  className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
                     showColorPicker || editor.getAttributes('textStyle').color
                       ? 'bg-purple-100 text-[#8F3EC9]'
                       : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                   title="Text Color"
                 >
-                  <span className="font-serif font-bold text-sm leading-none">T</span>
+                  <span className="font-serif font-bold text-base leading-none">T</span>
                   <span
-                    className="w-4 h-[3px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    className="w-4.5 h-[3.5px] rounded-full mt-0.5 shadow-2xs transition-colors"
                     style={{ backgroundColor: currentColor || '#292929' }}
                   />
                 </button>
@@ -574,16 +682,16 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                     setShowStyleDropdown(false)
                     setShowColorPicker(false)
                   }}
-                  className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
                     showHighlightPicker || editor.isActive('highlight')
                       ? 'bg-purple-100 text-[#8F3EC9]'
                       : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                   title="Text Highlight"
                 >
-                  <span className="font-serif font-bold text-sm leading-none">A</span>
+                  <span className="font-serif font-bold text-base leading-none">A</span>
                   <span
-                    className="w-4 h-[3px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    className="w-4.5 h-[3.5px] rounded-full mt-0.5 shadow-2xs transition-colors"
                     style={{ backgroundColor: currentHighlightColor }}
                   />
                 </button>
@@ -625,7 +733,7 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 )}
               </div>
 
-              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+              <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
 
               {/* 4. Media & Inserts */}
               {/* Link */}
@@ -636,14 +744,14 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                   setLinkUrl(editor.getAttributes('link').href || '')
                   setShowLinkModal(true)
                 }}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('link')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Insert / Edit Link"
               >
-                <LinkIcon className="w-4 h-4" />
+                <LinkIcon className="w-[18px] h-[18px]" />
               </button>
 
               {/* Image */}
@@ -651,10 +759,10 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowImageModal(true)}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Insert Image"
               >
-                <ImageIcon className="w-4 h-4" />
+                <ImageIcon className="w-[18px] h-[18px]" />
               </button>
 
               {/* Quote */}
@@ -662,14 +770,14 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBlockquote().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('blockquote')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Blockquote"
               >
-                <Quote className="w-4 h-4" />
+                <Quote className="w-[18px] h-[18px]" />
               </button>
 
               {/* Divider Line */}
@@ -677,13 +785,13 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.setHorizontalRule().run())}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Insert Divider"
               >
-                <Minus className="w-4 h-4" />
+                <Minus className="w-[18px] h-[18px]" />
               </button>
 
-              <div className="w-[1px] h-5 bg-slate-200 mx-1 shrink-0" />
+              <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
 
               {/* 5. Lists */}
               {/* Bullet List */}
@@ -691,14 +799,14 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBulletList().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('bulletList')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Bullet List"
               >
-                <List className="w-4 h-4" />
+                <List className="w-[18px] h-[18px]" />
               </button>
 
               {/* Numbered List */}
@@ -706,21 +814,28 @@ const MediumEditor = ({ onJsonUpdate, initialContent, editable = true }) => {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleOrderedList().run())}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('orderedList')
                     ? 'bg-purple-100 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Numbered List"
               >
-                <ListOrdered className="w-4 h-4" />
+                <ListOrdered className="w-[18px] h-[18px]" />
               </button>
             </div>
           </div>
         )}
 
       {/* Editor Content Area */}
-      <div className="bg-transparent text-zinc-900 font-medium-serif text-xl leading-relaxed min-h-[420px]">
+      <div
+        onClick={() => {
+          if (onEditorInteraction) {
+            onEditorInteraction()
+          }
+        }}
+        className="bg-transparent text-zinc-900 font-medium-serif text-xl leading-relaxed min-h-[420px]"
+      >
         <EditorContent editor={editor} />
       </div>
 

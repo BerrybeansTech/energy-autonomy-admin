@@ -38,6 +38,74 @@ export function generateSlug(text) {
     .replace(/^-+|-+$/g, '')   // Trim leading/trailing hyphens
 }
 
+/**
+ * Recursively extracts plain text string from Tiptap doc / JSON object
+ */
+export function extractPlainText(node) {
+  if (!node) return ''
+  if (typeof node === 'string') {
+    try {
+      const parsed = JSON.parse(node)
+      if (parsed && typeof parsed === 'object') return extractPlainText(parsed)
+    } catch {
+      return node.trim()
+    }
+    return node.trim()
+  }
+  let text = ''
+  if (node.text) text += node.text + ' '
+  if (node.content && Array.isArray(node.content)) {
+    node.content.forEach((child) => {
+      text += extractPlainText(child) + ' '
+    })
+  }
+  return text.trim()
+}
+
+/**
+ * Creates a normalized fingerprint of post data to accurately detect true unsaved changes
+ */
+export function getPayloadFingerprint(p) {
+  if (!p) return ''
+  const t = (p.title || '').trim()
+  const s = (p.slug || '').trim()
+  const text = extractPlainText(p.contentJson || p.content_json || p.content)
+  const img = p.featuredImage || p.featured_image || p.image || ''
+  const label = (p.labelName || p.label_name || p.category || p.category_name || '').trim()
+  const st = (p.seoTitle || p.seo_title || '').trim()
+  const sd = (p.seoDescription || p.seo_description || p.excerpt || '').trim()
+  return JSON.stringify({ t, s, text, img, label, st, sd })
+}
+
+/**
+ * Checks if Tiptap doc has any actual non-empty text or non-text media
+ */
+export function hasEditorActualContent(doc) {
+  if (!doc) return false
+  if (typeof doc === 'string') {
+    return doc.trim().length > 0
+  }
+  const text = extractPlainText(doc)
+  if (text && text.trim().length > 0) return true
+
+  let hasMedia = false
+  const checkNode = (node) => {
+    if (!node || hasMedia) return
+    if (node.type === 'image' || node.type === 'youtube' || node.type === 'horizontalRule') {
+      hasMedia = true
+      return
+    }
+    if (node.content && Array.isArray(node.content)) {
+      for (const child of node.content) {
+        checkNode(child)
+        if (hasMedia) return
+      }
+    }
+  }
+  checkNode(doc)
+  return hasMedia
+}
+
 const BlogCreatePage = ({ onBackToDashboard }) => {
   const { user, logout } = useAuth() || {}
   const { id: routeId } = useParams()
@@ -81,9 +149,16 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const subtitleTextareaRef = useRef(null)
   const isCreatingDraftRef = useRef(false)
   const createdDraftIdRef = useRef(null)
+  const draftPromiseRef = useRef(null)
   const hasUserInteractedRef = useRef(false)
   const lastSavedPayloadRef = useRef('')
-  const autosaveTimerRef = useRef(null)
+  const lastCachedPayloadRef = useRef('')
+  const isSavingRef = useRef(false)
+
+  // 3-Tier States
+  const [restoredFromBackup, setRestoredFromBackup] = useState(false)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [pendingNavAction, setPendingNavAction] = useState(null)
 
   // Auto-resize title textarea to fit multiline content
   useEffect(() => {
@@ -113,61 +188,72 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [isPreviewMode, setIsPreviewMode] = useState(false)
 
   /**
-   * Initializes a new draft in the database via POST /api/posts and updates URL
+   * Initializes a new draft in the database via POST /api/posts and updates URL.
+   * Leverages draftPromiseRef and createdDraftIdRef to guarantee only 1 POST call is made.
    */
   const ensureDraftId = async (initialOverrides = {}) => {
     if (postId) return postId
-    if (isCreatingDraftRef.current) return null
-    isCreatingDraftRef.current = true
-    try {
-      setAutosaveStatus('saving')
-      const finalTitle = initialOverrides.title !== undefined ? initialOverrides.title : (title || '')
-      const finalLabelName = initialOverrides.labelName !== undefined
-        ? initialOverrides.labelName
-        : (labelName && labelName.trim() ? labelName.trim() : null)
-      const finalSlug = initialOverrides.slug !== undefined
-        ? initialOverrides.slug
-        : ((finalTitle && finalTitle.trim()) ? generateSlug(finalTitle.trim()) : undefined)
-
-      const payload = {
-        title: finalTitle,
-        slug: finalSlug,
-        contentJson: initialOverrides.contentJson !== undefined ? initialOverrides.contentJson : editorJson,
-        featuredImage: initialOverrides.featuredImage !== undefined ? initialOverrides.featuredImage : (coverImage || null),
-        labelName: finalLabelName,
-        status: 'draft',
-        seoTitle: initialOverrides.seoTitle !== undefined ? initialOverrides.seoTitle : (seoTitle || null),
-        seoDescription: initialOverrides.seoDescription !== undefined ? initialOverrides.seoDescription : (subtitle || null),
-      }
-      const res = await postsApi.create(payload)
-      const newId = res?.id || res
-      if (newId) {
-        setPostId(newId)
-        setExistingPostStatus('draft')
-        createdDraftIdRef.current = newId
-        // Update URL bar seamlessly without unmounting, remounting, or reloading the component
-        window.history.replaceState(null, '', `/blog/edit/${newId}`)
-        setAutosaveStatus('saved')
-        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-        lastSavedPayloadRef.current = JSON.stringify({
-          title: payload.title,
-          subtitle: payload.seoDescription,
-          contentJson: payload.contentJson,
-          coverImage: payload.featuredImage,
-          labelName: payload.labelName,
-          slug: payload.slug || '',
-          seoTitle: payload.seoTitle,
-          seoDescription: payload.seoDescription,
-        })
-        return newId
-      }
-    } catch (err) {
-      console.error('Failed to initialize draft post:', err)
-      setAutosaveStatus('error')
-    } finally {
-      isCreatingDraftRef.current = false
+    if (createdDraftIdRef.current) return createdDraftIdRef.current
+    if (draftPromiseRef.current) {
+      return await draftPromiseRef.current
     }
-    return null
+
+    draftPromiseRef.current = (async () => {
+      isCreatingDraftRef.current = true
+      try {
+        setAutosaveStatus('saving')
+        const finalTitle = initialOverrides.title !== undefined ? initialOverrides.title : (title || '')
+        const finalLabelName = initialOverrides.labelName !== undefined
+          ? initialOverrides.labelName
+          : (labelName && labelName.trim() ? labelName.trim() : null)
+        const finalSlug = initialOverrides.slug !== undefined
+          ? initialOverrides.slug
+          : ((finalTitle && finalTitle.trim()) ? generateSlug(finalTitle.trim()) : undefined)
+
+        const payload = {
+          title: finalTitle,
+          slug: finalSlug,
+          contentJson: initialOverrides.contentJson !== undefined ? initialOverrides.contentJson : editorJson,
+          featuredImage: initialOverrides.featuredImage !== undefined ? initialOverrides.featuredImage : (coverImage || null),
+          labelName: finalLabelName,
+          status: 'draft',
+          seoTitle: initialOverrides.seoTitle !== undefined ? initialOverrides.seoTitle : (seoTitle || null),
+          seoDescription: initialOverrides.seoDescription !== undefined ? initialOverrides.seoDescription : (subtitle || null),
+        }
+        const res = await postsApi.create(payload)
+        const newId = res?.id || res
+        if (newId) {
+          createdDraftIdRef.current = newId
+          setPostId(newId)
+          setExistingPostStatus('draft')
+          // Update URL bar seamlessly without unmounting, remounting, or reloading the component
+          window.history.replaceState(null, '', `/blog/edit/${newId}`)
+          setAutosaveStatus('saved')
+          setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+          lastSavedPayloadRef.current = getPayloadFingerprint(payload)
+          return newId
+        }
+      } catch (err) {
+        console.error('Failed to initialize draft post:', err)
+        setAutosaveStatus('error')
+      } finally {
+        isCreatingDraftRef.current = false
+        draftPromiseRef.current = null
+      }
+      return null
+    })()
+
+    return await draftPromiseRef.current
+  }
+
+  /**
+   * User interaction trigger: only called when user clicks/focuses or interacts with editor area
+   */
+  const handleEditorInteraction = () => {
+    hasUserInteractedRef.current = true
+    if (!postId && !createdDraftIdRef.current) {
+      ensureDraftId()
+    }
   }
 
   // Handle route change / mount: load existing post or create fresh draft
@@ -233,23 +319,42 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             }
           } catch {}
         }
-        lastSavedPayloadRef.current = JSON.stringify({
-          title: existing.title || '',
-          subtitle: existing.seo_description || existing.excerpt || '',
-          contentJson: content,
-          coverImage: existing.featured_image || existing.image || '',
-          labelName: existingLabel || '',
-          slug: existing.slug || '',
-          seoTitle: existing.seo_title || existing.title || '',
-          seoDescription: existing.seo_description || existing.excerpt || '',
-        })
+        lastSavedPayloadRef.current = getPayloadFingerprint(existing)
         hasUserInteractedRef.current = false
+
+        // Crash Recovery: Check SSD localStorage for any uncommitted words typed before sudden shutdown
+        try {
+          const backupRaw = localStorage.getItem('energy_blog_crash_backup')
+          if (backupRaw) {
+            const backup = JSON.parse(backupRaw)
+            const isRecent = backup.timestamp && (Date.now() - backup.timestamp < 48 * 60 * 60 * 1000)
+            const matchesPost = String(backup.postId) === String(routeId)
+            if (isRecent && matchesPost) {
+              const dbText = extractPlainText(content).trim()
+              const backupText = extractPlainText(backup.contentJson).trim()
+              // ONLY restore if backup ACTUALLY has more text than database (i.e. truly unsaved words from a crash)
+              if (backupText.length > dbText.length + 3) {
+                setEditorJson(backup.contentJson)
+                if (backup.title && !existing.title) setTitle(backup.title)
+                setRestoredFromBackup(true)
+                hasUserInteractedRef.current = true
+              } else {
+                // Database already has this data (e.g. reload or already saved) -> remove stale local cache so no banner appears!
+                localStorage.removeItem('energy_blog_crash_backup')
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Crash recovery check failed:', e)
+        }
       }).catch((err) => {
         console.error('Failed to load post by ID:', err)
       })
     } else {
-      // Writing a new blog: initialize state and generate a fresh draft ID
+      // Writing a new blog: initialize state cleanly with NO initial draft creation
       setPostId(null)
+      createdDraftIdRef.current = null
+      draftPromiseRef.current = null
       setExistingPostStatus('draft')
       setTitle('')
       setSlug('')
@@ -267,6 +372,33 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       setStatus('published')
       hasUserInteractedRef.current = false
       lastSavedPayloadRef.current = ''
+      setAutosaveStatus('idle')
+      setLastSavedTime(null)
+
+      // Crash Recovery: Check SSD localStorage for any unsaved new post draft
+      try {
+        const backupRaw = localStorage.getItem('energy_blog_crash_backup')
+        if (backupRaw) {
+          const backup = JSON.parse(backupRaw)
+          const isRecent = backup.timestamp && (Date.now() - backup.timestamp < 48 * 60 * 60 * 1000)
+          const backupText = extractPlainText(backup.contentJson).trim()
+          if (isRecent && !backup.postId && (backupText.length > 0 || (backup.title && backup.title.trim()))) {
+            if (backup.title) setTitle(backup.title)
+            if (backup.contentJson) setEditorJson(backup.contentJson)
+            if (backup.subtitle) {
+              setSubtitle(backup.subtitle)
+              setShowSubtitleInput(true)
+            }
+            if (backup.labelName) setLabelName(backup.labelName)
+            setRestoredFromBackup(true)
+            hasUserInteractedRef.current = true
+          } else {
+            localStorage.removeItem('energy_blog_crash_backup')
+          }
+        }
+      } catch (e) {
+        console.warn('Crash recovery check failed:', e)
+      }
     }
 
     return () => {
@@ -274,43 +406,125 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     }
   }, [routeId])
 
-  // Debounced Autosave (PATCH /api/posts/:id) on every user edit
-  useEffect(() => {
-    if (!hasUserInteractedRef.current || !postId) return
+  // Helper to compile the active payload matching the backend schema
+  const getFullPayload = (overrides = {}) => {
+    const currentTitle = overrides.title !== undefined ? overrides.title : (title || '')
+    const currentSlug = overrides.slug !== undefined
+      ? overrides.slug
+      : ((currentTitle && currentTitle.trim()) ? generateSlug(currentTitle.trim()) : undefined)
+    const currentLabel = overrides.labelName !== undefined
+      ? overrides.labelName
+      : ((labelName && labelName.trim()) ? labelName.trim() : null)
 
-    const currentPayload = {
-      title: title || '',
-      slug: (title && title.trim()) ? generateSlug(title.trim()) : undefined,
-      contentJson: editorJson,
-      featuredImage: coverImage || null,
-      labelName: (labelName && labelName.trim()) ? labelName.trim() : null,
-      seoTitle: (seoTitle && seoTitle.trim()) ? seoTitle.trim() : (title || null),
-      seoDescription: (seoDescription && seoDescription.trim()) ? seoDescription.trim() : (subtitle || null),
+    return {
+      title: currentTitle,
+      slug: currentSlug,
+      contentJson: overrides.contentJson !== undefined ? overrides.contentJson : editorJson,
+      featuredImage: overrides.featuredImage !== undefined ? overrides.featuredImage : (coverImage || null),
+      labelName: currentLabel,
+      seoTitle: overrides.seoTitle !== undefined ? overrides.seoTitle : ((seoTitle && seoTitle.trim()) ? seoTitle.trim() : (currentTitle || null)),
+      seoDescription: overrides.seoDescription !== undefined ? overrides.seoDescription : ((seoDescription && seoDescription.trim()) ? seoDescription.trim() : (subtitle || null)),
       status: existingPostStatus === 'published' ? 'published' : 'draft',
     }
+  }
 
-    const payloadStr = JSON.stringify(currentPayload)
-    if (payloadStr === lastSavedPayloadRef.current) return
-
-    setAutosaveStatus('saving')
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-
-    autosaveTimerRef.current = setTimeout(async () => {
-      try {
-        await postsApi.patch(postId, currentPayload)
-        lastSavedPayloadRef.current = payloadStr
-        setAutosaveStatus('saved')
-        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-      } catch (err) {
-        console.error('Autosave patch failed:', err)
-        setAutosaveStatus('error')
+  // Tier 1 & Direct Save to Backend PostgreSQL Database
+  const saveToDatabase = async (contentJsonOverride = null) => {
+    if (isSavingRef.current) return
+    let targetId = postId || createdDraftIdRef.current
+    if (!targetId) {
+      if (!hasUserInteractedRef.current && !hasEditorActualContent(contentJsonOverride || editorJson) && !title.trim()) {
+        return
       }
-    }, 1000)
-
-    return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+      targetId = await ensureDraftId(contentJsonOverride ? { contentJson: contentJsonOverride } : {})
+      if (!targetId) return
     }
+
+    const payload = getFullPayload(contentJsonOverride ? { contentJson: contentJsonOverride } : {})
+    const payloadFingerprint = getPayloadFingerprint(payload)
+    if (payloadFingerprint === lastSavedPayloadRef.current) return
+
+    try {
+      isSavingRef.current = true
+      setAutosaveStatus('saving')
+      await postsApi.patch(targetId, payload)
+      lastSavedPayloadRef.current = payloadFingerprint
+      setAutosaveStatus('saved')
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      // Completed line safely written to DB -> clear temporary SSD cache
+      try {
+        localStorage.removeItem('energy_blog_crash_backup')
+      } catch {}
+    } catch (err) {
+      console.error('Autosave patch failed:', err)
+      setAutosaveStatus('error')
+    } finally {
+      isSavingRef.current = false
+    }
+  }
+
+  // Tier 1 Callback: Triggered only when a line visually wraps or Enter is pressed
+  const handleLineWrap = (updatedContentJson) => {
+    if (!hasUserInteractedRef.current && !hasEditorActualContent(updatedContentJson)) return
+    hasUserInteractedRef.current = true
+    saveToDatabase(updatedContentJson)
+  }
+
+  // Tier 2: 5-Second Local Cache for Unfinished Lines (Writes to SSD; 0 API calls to server)
+  useEffect(() => {
+    const localCacheInterval = setInterval(() => {
+      if (!hasUserInteractedRef.current) return
+
+      const payload = getFullPayload()
+      const payloadFingerprint = getPayloadFingerprint(payload)
+
+      // Only write to SSD if there are unsaved words on current line AND they differ from previous cache
+      if (payloadFingerprint !== lastSavedPayloadRef.current && payloadFingerprint !== lastCachedPayloadRef.current) {
+        try {
+          localStorage.setItem('energy_blog_crash_backup', JSON.stringify({
+            ...payload,
+            postId,
+            subtitle,
+            timestamp: Date.now(),
+          }))
+          lastCachedPayloadRef.current = payloadFingerprint
+        } catch (e) {
+          console.warn('LocalStorage backup failed:', e)
+        }
+      }
+    }, 5000)
+
+    return () => clearInterval(localCacheInterval)
   }, [title, subtitle, editorJson, coverImage, labelName, slug, seoTitle, seoDescription, postId, existingPostStatus])
+
+  // Tier 3: Check if there are unsaved words on the current line
+  const isDirty = () => {
+    if (!hasUserInteractedRef.current) return false
+    const currentFingerprint = getPayloadFingerprint(getFullPayload())
+    return currentFingerprint !== lastSavedPayloadRef.current
+  }
+
+  // Tier 3 Navigation Interceptor: Blocks tab clicks if an unfinished line is pending
+  const handleProtectedNavigation = (navigateAction) => {
+    if (isDirty()) {
+      setPendingNavAction(() => navigateAction)
+      setShowLeaveModal(true)
+    } else {
+      navigateAction()
+    }
+  }
+
+  // Window Unload Guard: Warns if user closes tab or refreshes with unsaved text
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isDirty()) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [title, subtitle, editorJson, coverImage, labelName, slug, seoTitle, seoDescription, postId])
 
   // Title change handler with automatic title-based URL slug and SEO Title generation
   const handleTitleChange = (e) => {
@@ -323,7 +537,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       setSeoTitle(val)
     }
     if (errorMessage) setErrorMessage('')
-    if (!postId && !isCreatingDraftRef.current) {
+    if (val.trim().length > 0 && !postId && !createdDraftIdRef.current) {
       ensureDraftId({ title: val, slug: autoSlug })
     }
   }
@@ -386,7 +600,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           setCoverImage(fileUrl)
           setCoverFilename(filename || fileUrl.split('/').pop().split('\\').pop())
           setShowCoverInput(false)
-          if (!postId && !isCreatingDraftRef.current) {
+          if (!postId && !createdDraftIdRef.current) {
             ensureDraftId({ featuredImage: fileUrl })
           }
         }
@@ -456,11 +670,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     setErrorMessage('')
     setIsPublishing(true)
 
-    // Clear any pending autosave debounce timer
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
-
     try {
-      let targetId = postId
+      let targetId = postId || createdDraftIdRef.current
       if (!targetId) {
         targetId = await ensureDraftId({
           title: cleanTitle,
@@ -493,6 +704,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       setAutosaveStatus('saved')
       setStatus('published')
       setExistingPostStatus('published')
+      lastSavedPayloadRef.current = getPayloadFingerprint(postPayload)
+      try {
+        localStorage.removeItem('energy_blog_crash_backup')
+      } catch {}
       setIsPublishSuccess(true)
       setIsPublishDrawerOpen(false)
 
@@ -531,7 +746,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     try {
       setIsOpeningDrawer(true)
       const currentLabelName = (labelName && labelName.trim()) ? labelName.trim() : null
-      let targetId = postId
+      let targetId = postId || createdDraftIdRef.current
       if (!targetId) {
         targetId = await ensureDraftId({
           title: title || '',
@@ -557,7 +772,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           status: existingPostStatus === 'published' ? 'published' : 'draft',
         }
         await postsApi.patch(targetId, patchPayload)
-        lastSavedPayloadRef.current = JSON.stringify(patchPayload)
+        lastSavedPayloadRef.current = getPayloadFingerprint(patchPayload)
+        try {
+          localStorage.removeItem('energy_blog_crash_backup')
+        } catch {}
         setAutosaveStatus('saved')
         setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
       }
@@ -637,6 +855,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <div className="relative group flex justify-center">
             <Link
               to="/dashboard"
+              onClick={(e) => {
+                e.preventDefault()
+                handleProtectedNavigation(() => navigate('/dashboard'))
+              }}
               className={`transition-all duration-200 ${
                 isSidebarExpanded
                   ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -663,6 +885,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <div className="relative group flex justify-center">
             <Link
               to="/blog"
+              onClick={(e) => {
+                e.preventDefault()
+                handleProtectedNavigation(() => navigate('/blog'))
+              }}
               className={`transition-all duration-200 ${
                 isSidebarExpanded
                   ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -689,6 +915,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <div className="relative group flex justify-center">
             <Link
               to="/blog/create"
+              onClick={(e) => {
+                e.preventDefault()
+                handleProtectedNavigation(() => navigate('/blog/create'))
+              }}
               className={`transition-all duration-200 cursor-pointer ${
                 isSidebarExpanded
                   ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-medium text-[#8F3EC9] bg-purple-50/80 border border-purple-200/80 shadow-[0_2px_8px_rgba(143,62,201,0.06)]'
@@ -739,8 +969,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 <button
                   type="button"
                   onClick={() => {
-                    if (onBackToDashboard) onBackToDashboard()
-                    else navigate('/blog')
+                    handleProtectedNavigation(() => {
+                      if (onBackToDashboard) onBackToDashboard()
+                      else navigate('/blog')
+                    })
                   }}
                   className="w-full h-9 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
                 >
@@ -752,8 +984,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      logout()
-                      navigate('/login')
+                      handleProtectedNavigation(() => {
+                        logout()
+                        navigate('/login')
+                      })
                     }}
                     className="w-full h-10 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-lg transition-colors cursor-pointer"
                   >
@@ -776,8 +1010,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               <button
                 type="button"
                 onClick={() => {
-                  if (onBackToDashboard) onBackToDashboard()
-                  else navigate('/blog')
+                  handleProtectedNavigation(() => {
+                    if (onBackToDashboard) onBackToDashboard()
+                    else navigate('/blog')
+                  })
                 }}
                 title="Exit Editor"
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
@@ -788,8 +1024,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 <button
                   type="button"
                   onClick={() => {
-                    logout()
-                    navigate('/login')
+                    handleProtectedNavigation(() => {
+                      logout()
+                      navigate('/login')
+                    })
                   }}
                   title="Sign out"
                   className="w-8 h-8 flex items-center justify-center rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50/80 transition-colors cursor-pointer"
@@ -815,8 +1053,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           <button
             type="button"
             onClick={() => {
-              if (onBackToDashboard) onBackToDashboard()
-              else navigate('/blog')
+              handleProtectedNavigation(() => {
+                if (onBackToDashboard) onBackToDashboard()
+                else navigate('/blog')
+              })
             }}
             className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
           >
@@ -935,12 +1175,50 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         {!isPreviewMode ? (
           /* ================= EDIT MODE ================= */
           <div className="space-y-4">
+            {/* Crash Recovery Notification Banner */}
+            {restoredFromBackup && (
+              <div className="flex items-center justify-between px-4 py-2.5 bg-purple-50/90 border border-purple-200/90 rounded-xl text-xs text-purple-900 shadow-xs animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-[#8F3EC9] shrink-0" />
+                  <span>
+                    <strong>Restored draft from crash backup.</strong> Unsaved words were recovered from your local storage.
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveToDatabase()
+                      setRestoredFromBackup(false)
+                    }}
+                    className="font-bold text-[#8F3EC9] hover:text-[#7B2EB3] hover:underline cursor-pointer"
+                  >
+                    Save to Server Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { localStorage.removeItem('energy_blog_crash_backup') } catch {}
+                      setRestoredFromBackup(false)
+                    }}
+                    className="text-slate-400 hover:text-slate-700 p-0.5 rounded cursor-pointer"
+                    title="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Top Toolbar Row: Clean Borderless Inline Add Cover & Add Subtitle */}
             <div className="flex items-center gap-5 pt-2">
               {!coverImage && !showCoverInput && (
                 <button
                   type="button"
-                  onClick={() => setShowCoverInput(true)}
+                  onClick={() => {
+                    setShowCoverInput(true)
+                    handleEditorInteraction()
+                  }}
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-[#8F3EC9] transition-colors cursor-pointer py-1 select-none group"
                 >
                   <ImageIcon className="w-4 h-4 text-[#8F3EC9] group-hover:scale-110 transition-transform" />
@@ -951,7 +1229,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               {!showSubtitleInput && !subtitle && (
                 <button
                   type="button"
-                  onClick={() => setShowSubtitleInput(true)}
+                  onClick={() => {
+                    setShowSubtitleInput(true)
+                    handleEditorInteraction()
+                  }}
                   className="flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-[#8F3EC9] transition-colors cursor-pointer py-1 select-none group"
                 >
                   <Type className="w-4 h-4 text-[#8F3EC9] group-hover:scale-110 transition-transform" />
@@ -1038,7 +1319,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     if (!isSeoDescriptionEdited) {
                       setSeoDescription(val)
                     }
-                    if (!postId && !isCreatingDraftRef.current) {
+                    if (val.trim().length > 0 && !postId && !createdDraftIdRef.current) {
                       ensureDraftId({ seoDescription: val })
                     }
                   }}
@@ -1070,15 +1351,19 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             <div>
               <MediumEditor
                 onJsonUpdate={(json) => {
-                  hasUserInteractedRef.current = true
                   setEditorJson(json)
                   if (errorMessage && errorMessage.toLowerCase().includes('blog content')) {
                     setErrorMessage('')
                   }
-                  if (!postId && !isCreatingDraftRef.current) {
-                    ensureDraftId({ contentJson: json })
+                  if (hasEditorActualContent(json)) {
+                    hasUserInteractedRef.current = true
+                    if (!postId && !createdDraftIdRef.current) {
+                      ensureDraftId({ contentJson: json })
+                    }
                   }
                 }}
+                onLineWrap={handleLineWrap}
+                onEditorInteraction={handleEditorInteraction}
                 initialContent={editorJson}
               />
             </div>
@@ -1456,6 +1741,84 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ------------------------------------------------------------- */}
+      {/* TIER 3: UNSAVED EDITS NAVIGATION GUARD MODAL                  */}
+      {/* ------------------------------------------------------------- */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/80">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-900 leading-tight">
+                  Save Draft Before Leaving?
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  You have an unfinished line or edits that haven't been saved to the server yet. Would you like to save this draft before leaving?
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLeaveModal(false)
+                  setPendingNavAction(null)
+                }}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer order-3 sm:order-1"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetDeleteId = postId || createdDraftIdRef.current
+                  if (targetDeleteId) {
+                    try {
+                      await postsApi.delete(targetDeleteId)
+                    } catch (err) {
+                      console.error('Failed to delete discarded draft post:', err)
+                    }
+                  }
+                  try {
+                    localStorage.removeItem('energy_blog_crash_backup')
+                  } catch {}
+                  setShowLeaveModal(false)
+                  if (pendingNavAction) {
+                    const action = pendingNavAction
+                    setPendingNavAction(null)
+                    action()
+                  }
+                }}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer order-2"
+              >
+                Discard & Leave
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await saveToDatabase()
+                  try {
+                    localStorage.removeItem('energy_blog_crash_backup')
+                  } catch {}
+                  setShowLeaveModal(false)
+                  if (pendingNavAction) {
+                    const action = pendingNavAction
+                    setPendingNavAction(null)
+                    action()
+                  }
+                }}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] rounded-xl shadow-xs transition-colors cursor-pointer order-1 sm:order-3"
+              >
+                Save Draft & Leave
+              </button>
             </div>
           </div>
         </div>
