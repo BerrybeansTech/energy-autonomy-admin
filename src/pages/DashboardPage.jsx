@@ -1,6 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useBlog } from '../context/BlogContext';
+import { getBlogImage } from '../data/imageAssets';
+import {
+  Image as ImageIcon,
+  ArrowRight,
+} from 'lucide-react';
 
 const statCardsConfig = (posts) => {
   const published = posts.filter((p) => p.status === 'published').length;
@@ -8,7 +13,7 @@ const statCardsConfig = (posts) => {
 
   return [
     {
-      label: 'Total Posts',
+      label: 'TOTAL POSTS',
       value: posts.length,
       sub: 'All articles in system',
       iconBg: 'bg-purple-50 text-[#8F3EC9]',
@@ -21,7 +26,7 @@ const statCardsConfig = (posts) => {
       ),
     },
     {
-      label: 'Published',
+      label: 'PUBLISHED',
       value: published,
       sub: 'Live on website',
       iconBg: 'bg-emerald-50 text-emerald-600',
@@ -34,7 +39,7 @@ const statCardsConfig = (posts) => {
       ),
     },
     {
-      label: 'Drafts',
+      label: 'DRAFTS',
       value: drafts,
       sub: 'In preparation',
       iconBg: 'bg-amber-50 text-amber-600',
@@ -49,31 +54,55 @@ const statCardsConfig = (posts) => {
   ];
 };
 
-const activityConfig = {
-  publish: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200/80', dot: 'bg-emerald-500', icon: '✓' },
-  draft: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/80', dot: 'bg-amber-500', icon: '◎' },
-  edit: { bg: 'bg-purple-50', text: 'text-[#8F3EC9]', border: 'border-purple-200/80', dot: 'bg-[#8F3EC9]', icon: '✎' },
+/**
+ * Thumbnail component with graceful fallback if image fails to load
+ */
+const ArticleThumbnail = ({ src, title }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100/80 shrink-0 flex items-center justify-center text-[#8F3EC9]">
+        <ImageIcon className="w-5 h-5 opacity-40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-11 h-11 rounded-xl overflow-hidden bg-slate-100 border border-slate-200/80 shrink-0 flex items-center justify-center">
+      <img
+        src={src}
+        alt={title || 'Cover'}
+        onError={() => setHasError(true)}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+      />
+    </div>
+  );
 };
 
 const DashboardPage = () => {
-  const { posts, loading } = useBlog();
+  const { posts, loading, fetchPosts } = useBlog();
   const cards = statCardsConfig(posts);
 
-  // Derive recent activity dynamically from real posts
+  // Auto-fetch fresh statistics from API on mount and window focus
+  useEffect(() => {
+    if (fetchPosts) {
+      fetchPosts();
+    }
+    const handleFocus = () => {
+      if (fetchPosts) {
+        fetchPosts();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchPosts]);
+
+  // Derive recent activity dynamically with rich post attributes
   const recentActivity = useMemo(() => {
     return [...posts]
       .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0))
-      .slice(0, 6)
-      .map((p) => {
-        const isPublished = p.status === 'published';
-        return {
-          id: p.id,
-          action: isPublished ? 'Published' : 'Drafted',
-          title: p.title,
-          time: p.publishedAt ? `Updated ${p.publishedAt}` : 'Recently',
-          type: isPublished ? 'publish' : 'draft',
-        };
-      });
+      .slice(0, 8);
   }, [posts]);
 
   return (
@@ -143,61 +172,107 @@ const DashboardPage = () => {
         ))}
       </div>
 
-      {/* ── Recent Activity Feed ── */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 hover:shadow-md transition-shadow duration-300 p-6">
-        <div className="flex items-center justify-between mb-5">
+      {/* ── Recent Activity Section (Updated First, Article Center, Status Last) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow duration-300 overflow-hidden">
+        {/* Card Header */}
+        <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-slate-900">Recent Activity</h2>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Latest blog articles from database</p>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              Latest blog articles from database
+            </p>
           </div>
+
           <Link
             to="/blog"
-            className="flex items-center gap-1.5 text-xs font-bold text-[#8F3EC9] hover:underline px-3 py-1.5 rounded-lg hover:bg-purple-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8F3EC9] hover:underline px-2.5 py-1.5 rounded-lg hover:bg-purple-50 transition-colors"
           >
-            View all
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <span>View all</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
+        {/* Content Table Header */}
+        <div className="px-5 sm:px-6 py-2.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <span className="flex-1 min-w-0">Article</span>
+          <span className="w-36 sm:w-44 shrink-0 text-center">Updated</span>
+          <span className="w-28 sm:w-32 shrink-0 text-right">Status</span>
+        </div>
+
+        {/* Content List */}
         {loading ? (
-          <div className="space-y-2 py-2">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="h-12 bg-slate-100 rounded-xl animate-pulse" />
+          <div className="p-6 space-y-3">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-14 bg-slate-100 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : recentActivity.length === 0 ? (
-          <div className="py-8 text-center text-slate-400">
-            <p className="text-xs font-medium">No posts in the system yet.</p>
+          <div className="py-12 text-center text-slate-400">
+            <p className="text-xs font-semibold text-slate-700">No articles in the system yet.</p>
             <Link
               to="/blog/create"
-              className="mt-2 inline-block text-xs font-semibold text-[#8F3EC9] hover:underline"
+              className="mt-2 inline-block text-xs font-bold text-[#8F3EC9] hover:underline"
             >
               Write your first blog post →
             </Link>
           </div>
         ) : (
-          <div className="space-y-2">
-            {recentActivity.map((item, idx) => {
-              const c = activityConfig[item.type] || activityConfig.edit;
+          <div className="divide-y divide-slate-100 text-xs">
+            {recentActivity.map((post) => {
+              const isPub = post.status === 'published';
+              const coverImg = getBlogImage(post.image || post.featuredImage);
+              const dateStr = post.publishedAt
+                ? `Updated ${post.publishedAt}`
+                : (post.updatedAt
+                    ? `Updated ${new Date(post.updatedAt).toISOString().split('T')[0]}`
+                    : 'Updated recently');
+
               return (
                 <div
-                  key={item.id || idx}
-                  className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-100/80 hover:bg-slate-50/70 transition-all group animate-fade-in"
-                  style={{ animationDelay: `${idx * 50}ms` }}
+                  key={post.id}
+                  className="px-5 sm:px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-purple-50/20 transition-colors group"
                 >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
-                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border shrink-0 uppercase tracking-wider ${c.bg} ${c.text} ${c.border}`}>
-                    {item.action}
-                  </span>
-                  <Link
-                    to={`/blog/view/${item.id}`}
-                    className="text-xs font-semibold text-slate-800 flex-1 truncate group-hover:text-[#8F3EC9] transition-colors"
-                  >
-                    {item.title}
-                  </Link>
-                  <span className="text-[11px] text-slate-500 shrink-0 font-semibold">{item.time}</span>
+                  {/* 1. ARTICLE (First on Left) */}
+                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <ArticleThumbnail src={coverImg} title={post.title} />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={`/blog/view/${post.id}`}
+                        className="font-bold text-slate-900 group-hover:text-[#8F3EC9] transition-colors truncate block text-xs"
+                        title={post.title}
+                      >
+                        {post.title || 'Untitled Blog Post'}
+                      </Link>
+                      {post.excerpt && (
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5 font-normal">
+                          {post.excerpt}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. UPDATED (Center) */}
+                  <div className="w-36 sm:w-44 shrink-0 text-center text-[11px] font-semibold text-slate-500">
+                    {dateStr}
+                  </div>
+
+                  {/* 3. STATUS (Last on Right) */}
+                  <div className="w-28 sm:w-32 shrink-0 flex justify-end">
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg border shrink-0 ${
+                        isPub
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                          : 'bg-amber-50 text-amber-700 border-amber-200/80'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isPub ? 'bg-emerald-500' : 'bg-amber-500'
+                        }`}
+                      />
+                      <span>{isPub ? 'PUBLISHED' : 'DRAFT'}</span>
+                    </span>
+                  </div>
                 </div>
               );
             })}

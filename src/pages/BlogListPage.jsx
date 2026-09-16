@@ -6,7 +6,7 @@ import { ConfirmationModal } from '../components/common';
 import { uploadApi } from '../services/api';
 
 const BlogListPage = () => {
-  const { posts, deletePost, loading } = useBlog();
+  const { posts, deletePost, loading, fetchPosts } = useBlog();
   const navigate = useNavigate();
 
   // Active Tab: 'published' as first, 'draft' as second
@@ -17,6 +17,20 @@ const BlogListPage = () => {
   const [toastMessage, setToastMessage] = useState(null);
 
   const menuRef = useRef(null);
+
+  // Automatically fetch fresh posts from the API whenever Blog Management mounts or window regains focus
+  useEffect(() => {
+    if (fetchPosts) {
+      fetchPosts();
+    }
+    const handleWindowFocus = () => {
+      if (fetchPosts) {
+        fetchPosts();
+      }
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [fetchPosts]);
 
   // Close popup menu on outside click
   useEffect(() => {
@@ -117,11 +131,34 @@ const BlogListPage = () => {
         </div>
       )}
 
-      {/* ── Page Header: Title + Write Button ── */}
+      {/* ── Page Header: Title + Refresh Button + Write Button ── */}
       <div className="flex items-center justify-between pt-2 pb-1">
-        <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-          Blogs
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+            Blogs
+          </h1>
+          <button
+            type="button"
+            onClick={() => fetchPosts && fetchPosts()}
+            disabled={loading}
+            title="Reload blogs from server"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-[#8F3EC9] hover:bg-purple-50 transition-colors cursor-pointer mt-1"
+          >
+            <svg
+              className={`w-4 h-4 ${loading ? 'animate-spin text-[#8F3EC9]' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        </div>
 
         <Link
           to="/blog/create"
@@ -143,6 +180,7 @@ const BlogListPage = () => {
             onClick={() => {
               setActiveTab('published');
               setOpenMenuId(null);
+              if (fetchPosts) fetchPosts();
             }}
             className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'published'
@@ -160,6 +198,7 @@ const BlogListPage = () => {
             onClick={() => {
               setActiveTab('draft');
               setOpenMenuId(null);
+              if (fetchPosts) fetchPosts();
             }}
             className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'draft'
@@ -202,7 +241,7 @@ const BlogListPage = () => {
 
       {/* ── Stories List ── */}
       <div className="divide-y divide-slate-200/60">
-        {loading ? (
+        {loading && posts.length === 0 ? (
           <div className="py-8 space-y-4">
             {[1, 2, 3].map((n) => (
               <div key={n} className="py-4 px-3 flex items-center gap-4 animate-pulse">

@@ -85,26 +85,20 @@ export const BlogProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const { isAuthenticated } = useAuth();
 
-  const inFlightFetchRef = React.useRef(false);
-
   const fetchPosts = useCallback(async (status) => {
-    if (inFlightFetchRef.current) return;
-    inFlightFetchRef.current = true;
     setLoading(true);
     setError(null);
     try {
       const data = await postsApi.getAll(status);
       const normalized = Array.isArray(data) ? data.map(normalizePost) : [];
       setPosts(normalized);
-      setLoading(false);
       return normalized;
     } catch (err) {
       console.error('Failed to fetch posts from API:', err);
       setError(err.message || 'Failed to load posts.');
-      setLoading(false);
       return [];
     } finally {
-      inFlightFetchRef.current = false;
+      setLoading(false);
     }
   }, []);
 

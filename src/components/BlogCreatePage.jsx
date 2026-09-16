@@ -11,7 +11,6 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   X,
-  Share2,
   Bookmark,
   LayoutDashboard,
   FileText,
@@ -154,6 +153,25 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const lastSavedPayloadRef = useRef('')
   const lastCachedPayloadRef = useRef('')
   const isSavingRef = useRef(false)
+  const publishDrawerBodyRef = useRef(null)
+
+  // Smoothly scroll publish drawer and page to top whenever an error occurs
+  const scrollToTopOnError = () => {
+    if (publishDrawerBodyRef.current) {
+      publishDrawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    if (errorMessage) {
+      scrollToTopOnError()
+      const timer = setTimeout(() => {
+        scrollToTopOnError()
+      }, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [errorMessage])
 
   // 3-Tier States
   const [restoredFromBackup, setRestoredFromBackup] = useState(false)
@@ -231,6 +249,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           setAutosaveStatus('saved')
           setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
           lastSavedPayloadRef.current = getPayloadFingerprint(payload)
+          if (blogContext?.fetchPosts) {
+            blogContext.fetchPosts().catch(() => {})
+          }
           return newId
         }
       } catch (err) {
@@ -455,6 +476,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       try {
         localStorage.removeItem('energy_blog_crash_backup')
       } catch {}
+      // Synchronize in-memory context state immediately
+      if (patchPost) {
+        patchPost(targetId, payload).catch(() => {})
+      }
     } catch (err) {
       console.error('Autosave patch failed:', err)
       setAutosaveStatus('error')
@@ -469,6 +494,23 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     hasUserInteractedRef.current = true
     saveToDatabase(updatedContentJson)
   }
+
+  // Debounced Auto-Save for Title, Subtitle, and Label changes
+  const headerDebounceRef = useRef(null)
+  useEffect(() => {
+    if (!hasUserInteractedRef.current) return
+    const targetId = postId || createdDraftIdRef.current
+    if (!targetId) return
+
+    if (headerDebounceRef.current) clearTimeout(headerDebounceRef.current)
+    headerDebounceRef.current = setTimeout(() => {
+      saveToDatabase()
+    }, 1000)
+
+    return () => {
+      if (headerDebounceRef.current) clearTimeout(headerDebounceRef.current)
+    }
+  }, [title, subtitle, labelName])
 
   // Tier 2: 5-Second Local Cache for Unfinished Lines (Writes to SSD; 0 API calls to server)
   useEffect(() => {
@@ -510,6 +552,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       setPendingNavAction(() => navigateAction)
       setShowLeaveModal(true)
     } else {
+      if (blogContext?.fetchPosts) {
+        blogContext.fetchPosts().catch(() => {})
+      }
       navigateAction()
     }
   }
@@ -634,30 +679,35 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     // 1. Content in editor is compulsory
     if (!hasBlogContent) {
       setErrorMessage('Please write your blog content before publishing.')
+      scrollToTopOnError()
       return
     }
 
     // 2. Cover image is compulsory
     if (!coverImage) {
       setErrorMessage('Cover image is compulsory. Please upload a cover image for your article.')
+      scrollToTopOnError()
       return
     }
 
     // 3. Title is compulsory
     if (!title || !title.trim()) {
       setErrorMessage('Title is compulsory. Please enter an article title.')
+      scrollToTopOnError()
       return
     }
 
     // 4. Subtitle / Summary is compulsory
     if (!subtitle || !subtitle.trim()) {
       setErrorMessage('Subtitle / Summary excerpt is compulsory. Please enter a subtitle.')
+      scrollToTopOnError()
       return
     }
 
     // 5. Label name is compulsory
     if (!labelName || !labelName.trim()) {
       setErrorMessage('Label Name is compulsory. Please enter a label name for your article.')
+      scrollToTopOnError()
       return
     }
 
@@ -695,10 +745,22 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         status: 'published',
       }
 
-      // Publish article using POST /api/posts/:id/publish
-      await postsApi.publish(targetId, postPayload)
-      if (publishPost) {
-        publishPost(targetId, postPayload).catch(() => {})
+      // Check if we are editing an existing post vs publishing a brand new draft
+      const isEditing = Boolean(routeId) || existingPostStatus === 'published'
+
+      if (isEditing) {
+        // Use PUT /api/posts/:id to properly update existing post
+        if (updatePost) {
+          await updatePost(targetId, postPayload)
+        } else {
+          await postsApi.update(targetId, postPayload)
+        }
+      } else {
+        // Publish new post / draft using POST /api/posts/:id/publish
+        await postsApi.publish(targetId, postPayload)
+        if (publishPost) {
+          publishPost(targetId, postPayload).catch(() => {})
+        }
       }
 
       setAutosaveStatus('saved')
@@ -726,6 +788,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         msg = `A post with the URL slug "${finalSlug}" already exists.`
       }
       setErrorMessage(msg)
+      scrollToTopOnError()
     } finally {
       setIsPublishing(false)
     }
@@ -785,6 +848,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     } finally {
       setIsOpeningDrawer(false)
       setIsPublishDrawerOpen(true)
+      setTimeout(() => {
+        if (publishDrawerBodyRef.current) {
+          publishDrawerBodyRef.current.scrollTop = 0
+        }
+      }, 50)
     }
   }
 
@@ -966,19 +1034,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
 
               {/* Actions */}
               <div className="space-y-1.5 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleProtectedNavigation(() => {
-                      if (onBackToDashboard) onBackToDashboard()
-                      else navigate('/blog')
-                    })
-                  }}
-                  className="w-full h-9 flex items-center justify-center gap-2 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4 shrink-0 text-slate-400" />
-                  <span>Exit Editor</span>
-                </button>
 
                 {logout && (
                   <button
@@ -1007,19 +1062,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               >
                 {(user?.name?.[0] || user?.email?.[0] || 'A').toUpperCase()}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  handleProtectedNavigation(() => {
-                    if (onBackToDashboard) onBackToDashboard()
-                    else navigate('/blog')
-                  })
-                }}
-                title="Exit Editor"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
               {logout && (
                 <button
                   type="button"
@@ -1132,7 +1174,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>Publish Article</span>
+                  <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Update Post' : 'Publish Article'}</span>
                 </>
               )}
             </button>
@@ -1299,6 +1341,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 rows={1}
                 value={title}
                 onChange={handleTitleChange}
+                onBlur={() => {
+                  if (postId || createdDraftIdRef.current) {
+                    saveToDatabase()
+                  }
+                }}
                 placeholder="Title"
                 className="w-full font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent resize-none overflow-hidden leading-tight block"
               />
@@ -1321,6 +1368,11 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     }
                     if (val.trim().length > 0 && !postId && !createdDraftIdRef.current) {
                       ensureDraftId({ seoDescription: val })
+                    }
+                  }}
+                  onBlur={() => {
+                    if (postId || createdDraftIdRef.current) {
+                      saveToDatabase()
                     }
                   }}
                   placeholder="Write a subtitle or brief summary..."
@@ -1395,15 +1447,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-3 text-zinc-400">
-                  <button className="hover:text-zinc-700 transition-colors">
-                    <Bookmark className="w-4 h-4" />
-                  </button>
-                  <button className="hover:text-zinc-700 transition-colors">
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
             </header>
 
@@ -1468,7 +1511,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               </div>
 
               {/* Drawer Body */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div ref={publishDrawerBodyRef} className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* Error Banner if any */}
                 {errorMessage && (
                   <div className="flex items-center justify-between gap-2 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-fade-in">
@@ -1659,7 +1702,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-semibold text-slate-700">
-                        SEO Title <span className="text-rose-500 font-bold">*</span>
+                        SEO Title
                       </label>
                       <span className={`text-[10px] ${seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
                         {seoTitle.length}/60 chars
@@ -1685,7 +1728,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-semibold text-slate-700">
-                        SEO Description <span className="text-rose-500 font-bold">*</span>
+                        SEO Description
                       </label>
                       <span className={`text-[10px] ${seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
                         {seoDescription.length}/160 chars
@@ -1731,12 +1774,12 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                         <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      <span>Publishing to Live Blog...</span>
+                      <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Updating Post...' : 'Publishing to Live Blog...'}</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>{existingPostStatus === 'published' ? 'Update & Publish Article' : 'Post & Publish Article'}</span>
+                      <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Update & Publish Article' : 'Post & Publish Article'}</span>
                     </>
                   )}
                 </button>
@@ -1787,6 +1830,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                       console.error('Failed to delete discarded draft post:', err)
                     }
                   }
+                  if (blogContext?.fetchPosts) {
+                    await blogContext.fetchPosts().catch(() => {})
+                  }
                   try {
                     localStorage.removeItem('energy_blog_crash_backup')
                   } catch {}
@@ -1805,6 +1851,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 type="button"
                 onClick={async () => {
                   await saveToDatabase()
+                  if (blogContext?.fetchPosts) {
+                    await blogContext.fetchPosts().catch(() => {})
+                  }
                   try {
                     localStorage.removeItem('energy_blog_crash_backup')
                   } catch {}
