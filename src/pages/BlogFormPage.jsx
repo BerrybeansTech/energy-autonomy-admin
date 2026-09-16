@@ -7,35 +7,40 @@ import { BLOG_IMAGES, getBlogImage } from '../data/imageAssets';
 const BlogFormPage = ({ mode = 'create' }) => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { addPost, updatePost, getPost } = useBlog();
+  const { addPost, updatePost, getPost, posts } = useBlog();
 
   const [form, setForm] = useState({
     title: '',
     slug: '',
     excerpt: '',
     content: '',
-    category: categories[0],
+    category: '',
     status: 'draft',
-    author: 'Pavani',
-    readTime: '5 min read',
-    tags: 'energy, awareness',
-    image: 'blog1',
+    author: '',
+    readTime: '1 min read',
+    tags: '',
+    image: '',
   });
 
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (mode === 'edit' && id) {
-      const post = getPost(id);
-      if (post) {
-        setForm({
-          ...post,
-          tags: Array.isArray(post.tags) ? post.tags.join(', ') : post.tags || '',
-        });
-      }
+    let isMounted = true;
+    if (mode === 'edit' && id && getPost) {
+      getPost(id).then((post) => {
+        if (isMounted && post) {
+          setForm({
+            ...post,
+            tags: Array.isArray(post.tags) ? post.tags.join(', ') : post.tags || '',
+          });
+        }
+      });
     }
-  }, [mode, id]);
+    return () => {
+      isMounted = false;
+    };
+  }, [mode, id, getPost]);
 
   const generateSlug = (text) => {
     return text
@@ -58,33 +63,38 @@ const BlogFormPage = ({ mode = 'create' }) => {
   const validate = () => {
     const errs = {};
     if (!form.title.trim()) errs.title = 'Article title is required.';
+    if (!form.slug.trim()) errs.slug = 'URL slug is required.';
     if (!form.excerpt.trim()) errs.excerpt = 'Excerpt is required.';
-    if (!form.content.trim()) errs.content = 'Post body content is required.';
+    if (!form.content.trim()) errs.content = 'Content is required.';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     const payload = {
       ...form,
-      slug: form.slug || generateSlug(form.title),
       tags: form.tags
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean),
     };
 
-    if (mode === 'create') {
-      addPost(payload);
-    } else {
-      updatePost(Number(id), payload);
-    }
+    try {
+      if (mode === 'create') {
+        await addPost(payload);
+      } else {
+        await updatePost(id, payload);
+      }
 
-    setSaved(true);
-    setTimeout(() => navigate('/blog'), 900);
+      setSaved(true);
+      setTimeout(() => navigate('/blog'), 900);
+    } catch (err) {
+      console.error('Failed to save post:', err);
+      setErrors((prev) => ({ ...prev, submit: err.message || 'Failed to save.' }));
+    }
   };
 
   const insertFormatting = (prefix, suffix = '') => {
@@ -408,17 +418,20 @@ const BlogFormPage = ({ mode = 'create' }) => {
 
             {/* Category */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Category</label>
-              <select
+              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Category Name</label>
+              <input
+                type="text"
+                list="form-dynamic-categories"
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#8F3EC9]/20 focus:border-[#8F3EC9] transition-all appearance-none"
-                style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.25em 1.25em' }}
-              >
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                placeholder="Enter or select category..."
+                className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#8F3EC9]/20 focus:border-[#8F3EC9] transition-all"
+              />
+              <datalist id="form-dynamic-categories">
+                {Array.from(new Set(posts?.map(p => p.label_name || p.categoryName || p.category).filter(Boolean) || [])).map((c) => (
+                  <option key={c} value={c} />
                 ))}
-              </select>
+              </datalist>
             </div>
 
             {/* Author */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -6,17 +6,27 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const { login, error, setError } = useAuth();
+  const { login, error, setError, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // If already authenticated, redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    const success = login(email, password);
-    setLoading(false);
-    if (success) navigate('/dashboard');
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    const success = await login(email.trim(), password);
+    if (success) {
+      navigate('/dashboard');
+    }
   };
 
   return (
@@ -83,26 +93,13 @@ const LoginPage = () => {
               id="email"
               type="text"
               required
+              autoComplete="username"
               value={email}
-              onClick={() => {
-                if (!email) {
-                  setEmail('admin@gmail.com');
-                  if (!password) setPassword('admin@123');
-                  if (error) setError('');
-                }
-              }}
-              onFocus={() => {
-                if (!email) {
-                  setEmail('admin@gmail.com');
-                  if (!password) setPassword('admin@123');
-                  if (error) setError('');
-                }
-              }}
               onChange={(e) => {
                 setEmail(e.target.value);
                 if (error) setError('');
               }}
-              placeholder="Email or username"
+              placeholder="Enter your email"
               className="w-full px-3.5 py-3 bg-white text-[14px] text-[#1e2329] placeholder-[#9ca3af] rounded-xl border border-slate-200 hover:border-slate-300 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all duration-150"
             />
           </div>
@@ -122,21 +119,8 @@ const LoginPage = () => {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 required
+                autoComplete="current-password"
                 value={password}
-                onClick={() => {
-                  if (!password) {
-                    setPassword('admin@123');
-                    if (!email) setEmail('admin@gmail.com');
-                    if (error) setError('');
-                  }
-                }}
-                onFocus={() => {
-                  if (!password) {
-                    setPassword('admin@123');
-                    if (!email) setEmail('admin@gmail.com');
-                    if (error) setError('');
-                  }
-                }}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError('');
@@ -209,4 +193,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-

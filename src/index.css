@@ -336,15 +336,48 @@
 }
 
 .tiptap-editor .ProseMirror a {
-  color: #1a8917;
+  color: #8F3EC9;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .tiptap-editor .ProseMirror mark {
   background-color: #fef08a;
-  border-radius: 2px;
-  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+}
+
+.tiptap-editor .ProseMirror s,
+.tiptap-editor .ProseMirror del {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.tiptap-editor .ProseMirror code {
+  background-color: #f1f5f9;
+  color: #8F3EC9;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.tiptap-editor .ProseMirror pre {
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+.tiptap-editor .ProseMirror pre code {
+  color: inherit;
+  padding: 0;
+  background: none;
+  font-size: 0.875rem;
 }
 
 /* Bullet & Numbered Lists with generous spacing */

@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useBlog } from '../context/BlogContext';
 import { getBlogImage } from '../data/imageAssets';
 import { ConfirmationModal } from '../components/common';
+import { uploadApi } from '../services/api';
 
 const BlogListPage = () => {
-  const { posts, deletePost } = useBlog();
+  const { posts, deletePost, loading, fetchPosts } = useBlog();
   const navigate = useNavigate();
 
   // Active Tab: 'published' as first, 'draft' as second
@@ -16,6 +17,20 @@ const BlogListPage = () => {
   const [toastMessage, setToastMessage] = useState(null);
 
   const menuRef = useRef(null);
+
+  // Automatically fetch fresh posts from the API whenever Blog Management mounts or window regains focus
+  useEffect(() => {
+    if (fetchPosts) {
+      fetchPosts();
+    }
+    const handleWindowFocus = () => {
+      if (fetchPosts) {
+        fetchPosts();
+      }
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
+  }, [fetchPosts]);
 
   // Close popup menu on outside click
   useEffect(() => {
@@ -60,7 +75,8 @@ const BlogListPage = () => {
   };
 
   const handleCopyLink = (post) => {
-    const url = `${window.location.origin}/blog/view/${post.id}`;
+    const urlSlug = post.slug ? post.slug : post.id;
+    const url = `${window.location.origin}/blog/view/${urlSlug}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
     }
@@ -73,11 +89,24 @@ const BlogListPage = () => {
     navigate(`/blog/edit/${post.id}`);
   };
 
-  const handleDeleteBlog = (id) => {
-    deletePost(id);
-    setDeleteConfirm(null);
-    setOpenMenuId(null);
-    showToast('Blog deleted successfully');
+  const handleDeleteBlog = async (target) => {
+    if (!target) return;
+    const postId = typeof target === 'object' ? target.id : target;
+    const postImg = typeof target === 'object' ? target.image || target.featuredImage : null;
+
+    try {
+      await deletePost(postId);
+      // Clean up uploaded image on backend if applicable
+      if (postImg && (postImg.includes('/uploads/') || postImg.includes('cover-'))) {
+        const filename = postImg.split('/').pop().split('\\').pop();
+        await uploadApi.delete(filename).catch(() => {});
+      }
+      setDeleteConfirm(null);
+      setOpenMenuId(null);
+      showToast('Blog deleted successfully');
+    } catch (err) {
+      showToast('Failed to delete: ' + (err.message || 'Error'));
+    }
   };
 
   // Format relative or standard updated time
@@ -102,11 +131,34 @@ const BlogListPage = () => {
         </div>
       )}
 
-      {/* ── Page Header: Title + Write Button ── */}
+      {/* ── Page Header: Title + Refresh Button + Write Button ── */}
       <div className="flex items-center justify-between pt-2 pb-1">
-        <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-          Blogs
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+            Blogs
+          </h1>
+          <button
+            type="button"
+            onClick={() => fetchPosts && fetchPosts()}
+            disabled={loading}
+            title="Reload blogs from server"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-[#8F3EC9] hover:bg-purple-50 transition-colors cursor-pointer mt-1"
+          >
+            <svg
+              className={`w-4 h-4 ${loading ? 'animate-spin text-[#8F3EC9]' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        </div>
 
         <Link
           to="/blog/create"
@@ -128,6 +180,7 @@ const BlogListPage = () => {
             onClick={() => {
               setActiveTab('published');
               setOpenMenuId(null);
+              if (fetchPosts) fetchPosts();
             }}
             className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'published'
@@ -145,6 +198,7 @@ const BlogListPage = () => {
             onClick={() => {
               setActiveTab('draft');
               setOpenMenuId(null);
+              if (fetchPosts) fetchPosts();
             }}
             className={`pb-3 pt-1 text-sm transition-all duration-150 cursor-pointer relative flex items-center gap-1.5 ${
               activeTab === 'draft'
@@ -187,7 +241,20 @@ const BlogListPage = () => {
 
       {/* ── Stories List ── */}
       <div className="divide-y divide-slate-200/60">
-        {displayedPosts.length === 0 ? (
+        {loading && posts.length === 0 ? (
+          <div className="py-8 space-y-4">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="py-4 px-3 flex items-center gap-4 animate-pulse">
+                <div className="w-16 h-14 rounded-lg bg-slate-200 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-200 rounded w-1/3" />
+                  <div className="h-3 bg-slate-200 rounded w-2/3" />
+                  <div className="h-2 bg-slate-200 rounded w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : displayedPosts.length === 0 ? (
           <div className="py-16 text-center text-slate-400">
             <p className="text-sm font-medium">
               {search
@@ -216,13 +283,24 @@ const BlogListPage = () => {
                   {/* Image Thumbnail */}
                   <div
                     onClick={() => navigate(`/blog/view/${post.id}`)}
-                    className="shrink-0 w-16 h-14 sm:w-20 sm:h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer group-hover:opacity-90 transition-opacity"
+                    className="shrink-0 w-16 h-14 sm:w-20 sm:h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer group-hover:opacity-90 transition-opacity flex items-center justify-center"
                   >
-                    <img
-                      src={getBlogImage(post.image)}
-                      alt={post.title}
-                      className="w-full h-full object-cover"
-                    />
+                    {getBlogImage(post.image || post.featuredImage) ? (
+                      <img
+                        src={getBlogImage(post.image || post.featuredImage)}
+                        alt={post.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-50 via-slate-50 to-orange-50 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-[#8F3EC9]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
 
                   {/* Text Content */}
@@ -324,7 +402,7 @@ const BlogListPage = () => {
       <ConfirmationModal
         isOpen={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
-        onConfirm={() => handleDeleteBlog(deleteConfirm.id)}
+        onConfirm={() => handleDeleteBlog(deleteConfirm)}
         title="Delete blog?"
         message="Are you sure you want to delete this blog? This action cannot be undone."
         confirmText="Delete"
@@ -333,11 +411,19 @@ const BlogListPage = () => {
         itemPreview={
           deleteConfirm && (
             <div className="flex items-center gap-3">
-              <img
-                src={getBlogImage(deleteConfirm.image)}
-                alt={deleteConfirm.title}
-                className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
-              />
+              {getBlogImage(deleteConfirm.image || deleteConfirm.featuredImage) ? (
+                <img
+                  src={getBlogImage(deleteConfirm.image || deleteConfirm.featuredImage)}
+                  alt={deleteConfirm.title}
+                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-[#8F3EC9]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                  </svg>
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-900 truncate">
                   {deleteConfirm.title}
