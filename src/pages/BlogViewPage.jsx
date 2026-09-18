@@ -1,39 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import MediumEditor from '../components/MediumEditor';
 import { useBlog } from '../context/BlogContext';
 import { getBlogImage } from '../data/imageAssets';
 import { ConfirmationModal } from '../components/common';
 import { uploadApi } from '../services/api';
 import {
-  SlidersHorizontal,
   Edit3,
   Calendar,
+  Clock,
   Tag,
   Link as LinkIcon,
   Image as ImageIcon,
-  ChevronRight,
-  ChevronDown,
   Check,
   Globe,
-  Sparkles,
-  ExternalLink,
   Plus,
   X,
-  Star,
   Bookmark,
-  Code2,
-  Lock,
   User,
-  PanelRightClose,
-  PanelRightOpen,
   RotateCcw,
   CheckCircle2,
   Trash2,
-  ArrowLeft
+  ArrowLeft,
+  FileText,
+  AlertTriangle,
+  ExternalLink,
+  Layers,
+  Copy,
+  Eye,
+  SlidersHorizontal,
+  BookOpen,
 } from 'lucide-react';
 
 /**
- * Clean recursive renderer for Tiptap JSON content
+ * Clean recursive renderer for Tiptap JSON content in Preview Mode
  */
 function renderTiptapNode(node, index) {
   if (!node) return null;
@@ -61,34 +61,21 @@ function renderTiptapNode(node, index) {
         </HeadingTag>
       );
     }
-    case 'paragraph': {
-      if (!node.content || node.content.length === 0) {
-        return <p key={index} className="h-3" />;
-      }
+    case 'paragraph':
       return (
-        <p key={index} className="text-sm sm:text-base text-slate-700 leading-[1.8]">
-          {node.content.map((child, i) => renderTiptapNode(child, i))}
-        </p>
-      );
-    }
-    case 'blockquote':
-      return (
-        <blockquote
-          key={index}
-          className="border-l-4 border-[#8F3EC9] pl-4 py-2 my-4 italic text-slate-700 bg-purple-50/40 rounded-r-lg"
-        >
+        <p key={index} className="my-2.5 text-slate-700 leading-relaxed text-sm sm:text-base">
           {node.content?.map((child, i) => renderTiptapNode(child, i))}
-        </blockquote>
+        </p>
       );
     case 'bulletList':
       return (
-        <ul key={index} className="list-disc list-inside space-y-1.5 my-3 pl-2 text-slate-700 text-sm sm:text-base">
+        <ul key={index} className="list-disc list-inside my-3 space-y-1 text-slate-700 text-sm sm:text-base">
           {node.content?.map((child, i) => renderTiptapNode(child, i))}
         </ul>
       );
     case 'orderedList':
       return (
-        <ol key={index} className="list-decimal list-inside space-y-1.5 my-3 pl-2 text-slate-700 text-sm sm:text-base">
+        <ol key={index} className="list-decimal list-inside my-3 space-y-1 text-slate-700 text-sm sm:text-base">
           {node.content?.map((child, i) => renderTiptapNode(child, i))}
         </ol>
       );
@@ -98,20 +85,21 @@ function renderTiptapNode(node, index) {
           {node.content?.map((child, i) => renderTiptapNode(child, i))}
         </li>
       );
-    case 'image': {
-      const src = node.attrs?.src;
-      const resolved = getBlogImage(src);
-      if (!resolved) return null;
+    case 'blockquote':
       return (
-        <div key={index} className="my-6 rounded-xl overflow-hidden border border-slate-200">
-          <img
-            src={resolved}
-            alt={node.attrs?.alt || 'Article visual'}
-            className="w-full max-h-[520px] object-cover"
-          />
+        <blockquote key={index} className="border-l-4 border-[#8F3EC9] pl-4 py-1 my-4 italic text-slate-600 bg-purple-50/40 rounded-r-lg">
+          {node.content?.map((child, i) => renderTiptapNode(child, i))}
+        </blockquote>
+      );
+    case 'image':
+      return (
+        <div key={index} className="my-5 rounded-xl overflow-hidden border border-slate-200">
+          <img src={getBlogImage(node.attrs?.src)} alt={node.attrs?.alt || 'Article visual'} className="w-full h-auto object-cover max-h-96" />
+          {node.attrs?.title && (
+            <p className="text-center text-xs text-slate-400 py-1.5 bg-slate-50 border-t border-slate-100">{node.attrs.title}</p>
+          )}
         </div>
       );
-    }
     case 'codeBlock':
       return (
         <pre key={index} className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-sm overflow-x-auto my-4 leading-relaxed">
@@ -125,27 +113,30 @@ function renderTiptapNode(node, index) {
       if (node.marks) {
         node.marks.forEach((mark) => {
           if (mark.type === 'bold') {
-            content = <strong key="b" className="font-bold text-slate-900">{content}</strong>;
+            content = <strong key="bold" className="font-bold text-slate-900">{content}</strong>;
           } else if (mark.type === 'italic') {
-            content = <em key="i" className="italic">{content}</em>;
+            content = <em key="italic">{content}</em>;
           } else if (mark.type === 'strike') {
-            content = <del key="s" className="line-through text-slate-500">{content}</del>;
+            content = <s key="strike">{content}</s>;
           } else if (mark.type === 'code') {
-            content = <code key="code" className="bg-slate-100 text-[#8F3EC9] px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono">{content}</code>;
+            content = <code key="code" className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-xs text-purple-700">{content}</code>;
           } else if (mark.type === 'link') {
             content = (
               <a
                 key="link"
                 href={mark.attrs?.href}
                 target="_blank"
-                rel="noreferrer"
-                className="text-[#8F3EC9] hover:underline font-medium"
+                rel="noopener noreferrer"
+                className="text-[#8F3EC9] underline font-medium hover:text-[#7B2EB3]"
               >
                 {content}
               </a>
             );
-          } else if (mark.type === 'textStyle' && mark.attrs?.color) {
-            content = <span key="color" style={{ color: mark.attrs.color }}>{content}</span>;
+          } else if (mark.type === 'textStyle') {
+            const color = mark.attrs?.color;
+            if (color) {
+              content = <span key="color" style={{ color }}>{content}</span>;
+            }
           } else if (mark.type === 'highlight') {
             const color = mark.attrs?.color || '#fef08a';
             content = <mark key="mark" style={{ backgroundColor: color }} className="px-1 py-0.5 rounded">{content}</mark>;
@@ -163,6 +154,12 @@ function renderTiptapNode(node, index) {
   }
 }
 
+const extractMinutes = (val) => {
+  if (!val) return '1';
+  const matches = String(val).match(/\d+/);
+  return matches ? matches[0] : '1';
+};
+
 const BlogViewPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -172,24 +169,66 @@ const BlogViewPage = () => {
   const [loading, setLoading] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [drawerMode, setDrawerMode] = useState(null); // 'details' | 'meta' | null
+  const [copiedLink, setCopiedLink] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // ── Post Settings State (Exact fields from Publish Article popup) ──
-  const [isEditSettingsOpen, setIsEditSettingsOpen] = useState(false);
-  const [postSettings, setPostSettings] = useState({
-    coverImage: '',
+  const drawerBodyRef = useRef(null);
+
+  // ── Blog Details State (Title, Description, Image, Min Read, Label Name) ──
+  const [blogDetails, setBlogDetails] = useState({
     title: '',
-    subtitle: '',
+    description: '',
+    image: '',
+    readTime: '1',
     labelName: '',
+  });
+
+  // ── Meta Details State (SEO Title, SEO Description) ──
+  const [metaDetails, setMetaDetails] = useState({
     seoTitle: '',
     seoDescription: '',
   });
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [isSeoTitleEdited, setIsSeoTitleEdited] = useState(false);
-  const [isSeoDescriptionEdited, setIsSeoDescriptionEdited] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Track scroll for sticky full-width navbar
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
+      const scrollable = document.querySelector('main') || document.querySelector('.overflow-y-auto');
+      const containerScroll = scrollable ? scrollable.scrollTop : 0;
+      setIsScrolled(scrollY > 20 || containerScroll > 20);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    const scrollable = document.querySelector('main') || document.querySelector('.overflow-y-auto');
+    if (scrollable) {
+      scrollable.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollable) {
+        scrollable.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, []);
+
+  // Lock background body scroll when sidebar drawer or delete modal is active
+  useEffect(() => {
+    if (drawerMode || deleteConfirm) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [drawerMode, deleteConfirm]);
 
   // Asynchronously fetch post by ID or Slug
   useEffect(() => {
@@ -200,21 +239,16 @@ const BlogViewPage = () => {
         const found = await getPost(id);
         if (isMounted && found) {
           setPost(found);
-
-          const initialTitle = found.title || '';
-          const initialSubtitle = found.excerpt || found.subtitle || '';
-          const initialLabel = found.label_name || found.labelName || found.categoryName || found.category || '';
-          const initialCover = found.featuredImage || found.image || '';
-          const initialSeoTitle = found.seoTitle || found.seo_title || initialTitle;
-          const initialSeoDesc = found.seoDescription || found.seo_description || initialSubtitle;
-
-          setPostSettings({
-            coverImage: initialCover,
-            title: initialTitle,
-            subtitle: initialSubtitle,
-            labelName: initialLabel,
-            seoTitle: initialSeoTitle,
-            seoDescription: initialSeoDesc,
+          setBlogDetails({
+            title: found.title || '',
+            description: found.excerpt || found.subtitle || found.seoDescription || '',
+            image: found.featuredImage || found.image || '',
+            readTime: extractMinutes(found.readTime || found.readingTime || '1'),
+            labelName: found.label_name || found.labelName || found.categoryName || found.category || '',
+          });
+          setMetaDetails({
+            seoTitle: found.seoTitle || found.title || '',
+            seoDescription: found.seoDescription || found.excerpt || found.subtitle || '',
           });
         }
       } catch (err) {
@@ -231,63 +265,71 @@ const BlogViewPage = () => {
     };
   }, [id, getPost]);
 
-  const handleCoverUpload = async (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadingCover(true);
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setSaveError('Please select a valid image file (PNG, JPG, WebP).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setSaveError('Image size exceeds 10MB limit.');
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
       setSaveError('');
-      try {
-        const res = await uploadApi.upload(file);
-        const fileUrl = res.file?.url || res.file?.path;
-        if (fileUrl) {
-          setPostSettings((prev) => ({ ...prev, coverImage: fileUrl }));
-        }
-      } catch (err) {
-        console.error('Failed to upload cover image:', err);
-        setSaveError('Failed to upload image: ' + (err.message || 'Server error'));
-      } finally {
-        setUploadingCover(false);
-        if (e.target) e.target.value = '';
+      const res = await uploadApi.upload(file);
+      if (res && res.url) {
+        setBlogDetails((prev) => ({ ...prev, image: res.url }));
       }
+    } catch (err) {
+      console.error('Failed to upload image:', err);
+      setSaveError(err.message || 'Image upload failed.');
+    } finally {
+      setUploadingImage(false);
     }
   };
 
-  const handleRemoveCover = () => {
-    setPostSettings((prev) => ({ ...prev, coverImage: '' }));
+  const handleRemoveImage = () => {
+    setBlogDetails((prev) => ({ ...prev, image: '' }));
   };
 
-  const handleSavePostSettings = async () => {
-    if (!postSettings.coverImage?.trim()) {
-      setSaveError('Cover image is compulsory. Please upload a cover image for your article.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleSaveBlogDetails = async (e) => {
+    if (e) e.preventDefault();
+
+    if (!blogDetails.title.trim()) {
+      setSaveError('Title is required. Please provide an article title.');
+      if (drawerBodyRef.current) drawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (!postSettings.title?.trim()) {
-      setSaveError('Title is compulsory. Please enter an article title.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!blogDetails.description.trim()) {
+      setSaveError('Subtitle / Summary Excerpt is required.');
+      if (drawerBodyRef.current) drawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (!postSettings.subtitle?.trim()) {
-      setSaveError('Subtitle / Summary excerpt is compulsory. Please enter a subtitle.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    if (!postSettings.labelName?.trim()) {
-      setSaveError('Label Name is compulsory. Please enter a label name for your article.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!blogDetails.labelName.trim()) {
+      setSaveError('Label Name is required. Please enter a label/category.');
+      if (drawerBodyRef.current) drawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    setIsSavingSettings(true);
+    setIsSavingDetails(true);
     setSaveError('');
     try {
-      const cleanTitle = postSettings.title.trim();
+      const cleanTitle = blogDetails.title.trim();
+      const cleanDesc = blogDetails.description.trim();
+      const readCount = parseInt(blogDetails.readTime, 10) || 1;
+      const formattedReadTime = `${readCount} min read`;
       const payload = {
         title: cleanTitle,
-        featuredImage: postSettings.coverImage,
-        labelName: postSettings.labelName.trim(),
-        seoTitle: postSettings.seoTitle.trim() || cleanTitle,
-        seoDescription: postSettings.seoDescription.trim() || postSettings.subtitle.trim(),
+        featuredImage: blogDetails.image.trim(),
+        labelName: blogDetails.labelName.trim(),
+        readTime: formattedReadTime,
+        readingTime: formattedReadTime,
       };
 
       if (updatePost) {
@@ -297,46 +339,71 @@ const BlogViewPage = () => {
       setPost((prev) => ({
         ...prev,
         ...payload,
-        excerpt: postSettings.subtitle.trim(),
-        subtitle: postSettings.subtitle.trim(),
-        label_name: postSettings.labelName.trim(),
+        excerpt: cleanDesc,
+        subtitle: cleanDesc,
+        image: blogDetails.image.trim(),
+        featuredImage: blogDetails.image.trim(),
+        label_name: blogDetails.labelName.trim(),
       }));
 
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
-        setIsEditSettingsOpen(false);
-      }, 700);
+        setDrawerMode(null);
+      }, 900);
     } catch (err) {
-      console.error('Failed to save post settings:', err);
-      setSaveError(err.data?.message || err.message || 'Failed to update post settings');
+      console.error('Failed to save blog details:', err);
+      setSaveError(err.data?.message || err.message || 'Failed to update details');
     } finally {
-      setIsSavingSettings(false);
+      setIsSavingDetails(false);
     }
   };
 
-  // Track scroll on window and main container for sticky glass navbar
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop;
-      const scrollable = document.querySelector('main') || document.querySelector('.overflow-y-auto');
-      const containerScroll = scrollable ? scrollable.scrollTop : 0;
-      setIsScrolled(scrollY > 40 || containerScroll > 40);
-    };
+  const handleSaveMetaDetails = async (e) => {
+    if (e) e.preventDefault();
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    const scrollable = document.querySelector('main') || document.querySelector('.overflow-y-auto');
-    if (scrollable) {
-      scrollable.addEventListener('scroll', handleScroll, { passive: true });
+    if (!metaDetails.seoTitle.trim()) {
+      setSaveError('Meta Title is required. Please enter an SEO title.');
+      if (drawerBodyRef.current) drawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (!metaDetails.seoDescription.trim()) {
+      setSaveError('Meta Description is required. Please enter an SEO description.');
+      if (drawerBodyRef.current) drawerBodyRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
 
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (scrollable) {
-        scrollable.removeEventListener('scroll', handleScroll);
+    setIsSavingDetails(true);
+    setSaveError('');
+    try {
+      const cleanSeoTitle = metaDetails.seoTitle.trim();
+      const cleanSeoDesc = metaDetails.seoDescription.trim();
+      const payload = {
+        seoTitle: cleanSeoTitle,
+        seoDescription: cleanSeoDesc,
+      };
+
+      if (updatePost) {
+        await updatePost(post.id, payload);
       }
-    };
-  }, []);
+
+      setPost((prev) => ({
+        ...prev,
+        ...payload,
+      }));
+
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setDrawerMode(null);
+      }, 900);
+    } catch (err) {
+      console.error('Failed to save meta details:', err);
+      setSaveError(err.data?.message || err.message || 'Failed to update meta details');
+    } finally {
+      setIsSavingDetails(false);
+    }
+  };
 
   const toggleStatus = async () => {
     if (!post || statusLoading) return;
@@ -354,6 +421,17 @@ const BlogViewPage = () => {
     }
   };
 
+  const handleCopyLink = () => {
+    if (!post) return;
+    const urlSlug = post.slug || post.id;
+    const url = `${window.location.origin}/blog/view/${urlSlug}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url);
+    }
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
   const handleDelete = async () => {
     if (!post) return;
     try {
@@ -369,16 +447,59 @@ const BlogViewPage = () => {
     }
   };
 
+  // ── Clean Shimmer Skeleton Loading State ──
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-12 space-y-6 animate-pulse">
-        <div className="h-8 bg-slate-200 rounded-lg w-1/3" />
-        <div className="h-72 bg-slate-200 rounded-2xl w-full" />
-        <div className="h-6 bg-slate-200 rounded w-2/3" />
-        <div className="space-y-3 pt-4">
-          <div className="h-4 bg-slate-200 rounded w-full" />
-          <div className="h-4 bg-slate-200 rounded w-5/6" />
-          <div className="h-4 bg-slate-200 rounded w-4/6" />
+      <div className="space-y-6 pb-12 font-sans relative">
+        {/* Sticky Shimmer Header */}
+        <div className="sticky top-0 z-30 -mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3.5 border-b border-slate-200/80 bg-[#FAFBFC]/90 backdrop-blur-md">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-slate-200/80 animate-pulse" />
+              <div className="h-6 w-36 bg-slate-200/80 rounded-md animate-pulse" />
+            </div>
+            <div className="h-9 w-28 bg-slate-200/80 rounded-xl animate-pulse" />
+          </div>
+        </div>
+
+        {/* Shimmer Cards Grid */}
+        <div className="max-w-5xl mx-auto space-y-6 pt-2">
+          {/* Box 1 Skeleton - Post Overview */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-7 space-y-4 animate-pulse shadow-xs">
+            <div className="flex justify-between items-center">
+              <div className="h-7 w-40 bg-slate-200/80 rounded-md" />
+              <div className="h-7 w-28 bg-slate-200/80 rounded-md" />
+            </div>
+            <div className="h-8 w-2/3 bg-slate-200/80 rounded-lg" />
+            <div className="h-4 w-44 bg-slate-200/80 rounded-md" />
+          </div>
+
+          {/* Box 2 Skeleton - Edit Post */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-7 space-y-4 animate-pulse shadow-xs">
+            <div className="h-7 w-32 bg-slate-200/80 rounded-md" />
+            <div className="h-4 w-3/4 bg-slate-200/80 rounded-md" />
+            <div className="flex gap-3 pt-2">
+              <div className="h-9 w-28 bg-slate-200/80 rounded-lg" />
+              <div className="h-9 w-32 bg-slate-200/80 rounded-lg" />
+              <div className="h-9 w-32 bg-slate-200/80 rounded-lg" />
+            </div>
+          </div>
+
+          {/* Box 3 Skeleton - Meta Details */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-7 space-y-4 animate-pulse shadow-xs">
+            <div className="h-7 w-36 bg-slate-200/80 rounded-md" />
+            <div className="h-4 w-2/3 bg-slate-200/80 rounded-md" />
+            <div className="h-9 w-36 bg-slate-200/80 rounded-lg pt-2" />
+          </div>
+
+          {/* Box 4 Skeleton - Delete Post */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-7 space-y-4 animate-pulse shadow-xs">
+            <div className="flex justify-between items-center">
+              <div className="h-7 w-36 bg-slate-200/80 rounded-md" />
+              <div className="h-9 w-28 bg-slate-200/80 rounded-lg" />
+            </div>
+            <div className="h-4 w-3/4 bg-slate-200/80 rounded-md" />
+          </div>
         </div>
       </div>
     );
@@ -388,10 +509,7 @@ const BlogViewPage = () => {
     return (
       <div className="p-16 max-w-xl mx-auto text-center space-y-5 animate-fade-in-up">
         <div className="w-16 h-16 rounded-2xl bg-purple-50 text-[#8F3EC9] flex items-center justify-center mx-auto">
-          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+          <FileText className="w-8 h-8" />
         </div>
         <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Post Not Found</h2>
         <p className="text-sm text-slate-500 max-w-sm mx-auto">The requested article could not be located in the database.</p>
@@ -399,521 +517,686 @@ const BlogViewPage = () => {
           to="/blog"
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#8F3EC9] text-white rounded-lg text-xs font-bold hover:bg-[#7B2EB3] transition-colors shadow-sm"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <ArrowLeft className="w-4 h-4" />
           Return to Blog Posts
         </Link>
       </div>
     );
   }
 
+  const isPublished = post.status === 'published';
   const hasRichContent = post.contentJson && typeof post.contentJson === 'object' && post.contentJson.type === 'doc';
 
   return (
-    <div className="space-y-5 relative">
-      {/* ── Sticky Top Navbar ── */}
+    <div className="space-y-6 pb-12 font-sans relative">
+      {/* ── Sticky Full-Width Navbar (Sticks on scroll) ── */}
       <div
-        className={`sticky top-0 z-30 transition-all duration-150 -mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-4 border-b border-slate-200/80 bg-[#FAFBFC]/85 backdrop-blur-md ${
-          isScrolled ? 'shadow-[0_2px_8px_rgba(0,0,0,0.03)]' : ''
+        className={`sticky top-0 z-30 transition-all duration-150 -mt-4 sm:-mt-6 lg:-mt-8 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-2 border-b border-slate-200/80 bg-[#FAFBFC]/90 backdrop-blur-md ${
+          isScrolled ? 'shadow-[0_2px_10px_rgba(0,0,0,0.04)]' : ''
         }`}
       >
-        <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
-          {/* Left Side: Back button + Title / Preview label */}
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Link
-              to="/blog"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200/80 text-slate-600 hover:bg-slate-50 hover:text-[#8F3EC9] transition-all bg-white shadow-2xs text-xs font-semibold shrink-0 cursor-pointer"
-              title="Back to Blogs"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
-              <span>Back to Blogs</span>
-            </Link>
-
-            <div className="h-4 w-px bg-slate-200 shrink-0 hidden sm:block" />
-
-            {!isScrolled ? (
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight whitespace-nowrap">
-                Article Preview
-              </h1>
-            ) : (
-              <h2
-                className="text-sm sm:text-base font-bold font-lora text-slate-900 truncate leading-snug"
-                title={post.title}
+        <div className="flex items-center justify-between gap-4 max-w-5xl mx-auto">
+          {/* Left: Back Button + Subtle Grey Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            {isPreviewMode ? (
+              <button
+                type="button"
+                onClick={() => setIsPreviewMode(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#8F3EC9] transition-all bg-white shadow-2xs shrink-0 cursor-pointer"
+                title="Back to Overview"
+                aria-label="Back to Overview"
               >
-                {post.title}
-              </h2>
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
+              </button>
+            ) : (
+              <Link
+                to="/blog"
+                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-[#8F3EC9] transition-all bg-white shadow-2xs shrink-0 cursor-pointer"
+                title="Back to Blogs"
+                aria-label="Back to Blogs"
+              >
+                <ArrowLeft className="w-4 h-4 text-slate-600" />
+              </Link>
             )}
+
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight truncate">
+              {isPreviewMode ? 'Post Preview' : 'Post Overview'}
+            </h1>
           </div>
 
-          {/* Right Action Controls: Move to Draft / Publish, Post Settings toggle, Edit Content, Delete */}
+          {/* Right: Overview/Preview Mode Switcher + Move to Draft / Publish Article Status Button */}
           <div className="flex items-center gap-2 shrink-0">
+            {isPreviewMode ? (
+              <button
+                type="button"
+                onClick={() => setIsPreviewMode(false)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs transition-all cursor-pointer shrink-0"
+                title="Return to Overview Cards"
+              >
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <span>Overview</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsPreviewMode(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs transition-all cursor-pointer shrink-0"
+                title="Preview full article reader mode"
+              >
+                <Eye className="w-3.5 h-3.5 text-slate-500" />
+                <span>Preview</span>
+              </button>
+            )}
+
             <button
+              type="button"
               onClick={toggleStatus}
               disabled={statusLoading}
-              className={`px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all bg-white shadow-2xs cursor-pointer disabled:opacity-60 ${
-                post.status === 'published'
-                  ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
-                  : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs disabled:opacity-60 shrink-0 ${
+                isPublished
+                  ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
               }`}
             >
-              {statusLoading ? 'Updating...' : post.status === 'published' ? 'Move to Draft' : 'Publish Article'}
-            </button>
-
-            {/* Post Settings Toggle Button (Toggles between View Details and Edit Settings) */}
-            <button
-              type="button"
-              onClick={() => setIsEditSettingsOpen(!isEditSettingsOpen)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
-                isEditSettingsOpen
-                  ? 'bg-purple-50 border-purple-300 text-[#8F3EC9] font-bold ring-1 ring-purple-200'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#8F3EC9]'
-              }`}
-              title={isEditSettingsOpen ? 'Switch to View Details' : 'Edit Post Settings'}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>{isEditSettingsOpen ? 'View Details' : 'Post Settings'}</span>
-            </button>
-
-            {/* Edit Content Button -> Navigates to full blog editor */}
-            <Link
-              to={`/blog/edit/${post.id}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
-              title="Edit full blog content in rich text editor"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Content</span>
-            </Link>
-
-            {/* Delete Button */}
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 rounded-lg text-xs font-semibold transition-all bg-white shadow-2xs cursor-pointer"
-              title="Delete post"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-              <span>Delete</span>
+              {statusLoading ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span>Updating...</span>
+                </>
+              ) : isPublished ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Move to Draft</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Publish Article</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Article Layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left: Full Article */}
-        <article className="lg:col-span-8 w-full bg-white rounded-xl border border-slate-200/80 overflow-hidden transition-all duration-300">
-          {/* Featured Image */}
-          {Boolean(getBlogImage(postSettings.coverImage || post.featuredImage || post.image)) && (
-            <div className="relative aspect-[16/9] bg-slate-100 overflow-hidden group">
-              <img
-                src={getBlogImage(postSettings.coverImage || post.featuredImage || post.image)}
-                alt={post.title}
-                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-              {(postSettings.labelName || post.label_name || post.categoryName || post.category) && (
-                <div className="absolute top-3.5 left-3.5">
-                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#8F3EC9] backdrop-blur-sm shadow-xs">
-                    {postSettings.labelName || post.label_name || post.categoryName || post.category}
-                  </span>
-                </div>
-              )}
+      {/* ── Main Container: Mode 1 (Overview Boxes) OR Mode 2 (In-Page Reader Preview) ── */}
+      <div className="max-w-5xl mx-auto space-y-6 pt-2.5 sm:pt-4">
+        {/* ── Save Feedback Banner ── */}
+        {saveSuccess && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2.5 animate-scale-in shadow-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Changes saved successfully!</span>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* MODE 1: POST OVERVIEW (4 Clean Card Layout)                   */}
+        {/* ============================================================== */}
+        {!isPreviewMode ? (
+          <div className="space-y-6 animate-fade-in">
+            {/* ── 1. BOX 1: Post Overview Box ── */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-7 space-y-3">
+              {/* Header Row: Post Overview Title on Left, Copy Share Link on Top Right */}
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Post Overview
+                </h2>
+
+                {/* Top Right: Copy Share Link Button */}
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all cursor-pointer shadow-2xs font-semibold text-xs shrink-0"
+                  title="Copy shareable post link"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{copiedLink ? 'Copied Link!' : 'Copy Share Link'}</span>
+                </button>
+              </div>
+
+              {/* Blog Title with subtle grey color + font-lora styling + Status Badge */}
+              <div className="flex items-center gap-3 flex-wrap pt-1">
+                <h3 className="text-xl sm:text-2xl font-bold font-lora text-slate-700 leading-snug">
+                  {post.title || 'Untitled Post'}
+                </h3>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${
+                    isPublished
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isPublished ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`}
+                  />
+                  {isPublished ? 'PUBLISHED' : 'DRAFT'}
+                </span>
+              </div>
+
+              {/* Published Date directly under Post Title */}
+              <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <span>
+                  {post.publishedAt
+                    ? `Published on ${post.publishedAt.split('T')[0]}`
+                    : 'Not published yet (Draft)'}
+                </span>
+              </div>
             </div>
-          )}
 
-          <div className="p-5 sm:p-8 space-y-5">
-            {/* Meta Line */}
-            <div className="flex items-center gap-2 text-xs text-slate-400 pb-3 border-b border-slate-100">
-              <span>Updated {post.publishedAt ? post.publishedAt.split('T')[0] : 'recently'}</span>
-              <span>•</span>
-              <span>{post.readTime || post.readingTime || '1 min read'}</span>
-            </div>
-
-            {/* Title */}
-            <h1 className="text-2xl sm:text-3xl font-extrabold font-lora text-slate-900 leading-tight tracking-tight">
-              {postSettings.title || post.title}
-            </h1>
-
-            {/* Excerpt */}
-            {(postSettings.subtitle || post.excerpt) && (
-              <div className="relative">
-                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#8F3EC9] to-[#FE9B40] rounded-full" />
-                <p className="text-sm sm:text-base text-slate-600 italic leading-relaxed bg-purple-50/40 p-4 pl-5 rounded-lg">
-                  "{postSettings.subtitle || post.excerpt}"
+            {/* ── 2. BOX 2: Edit Post Box ── */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-7 space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Edit Post
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Make changes to your post content, title, tags, or cover image.
                 </p>
               </div>
-            )}
 
-            {/* Rich Body Content */}
-            <div className="pt-2">
-              {hasRichContent ? (
-                renderTiptapNode(post.contentJson, 0)
-              ) : (
-                <div className="space-y-3.5 text-sm text-slate-700 leading-[1.8]">
-                  {(post.content || '').split('\n\n').filter(Boolean).map((paragraph, index) => (
-                    <p key={index} className="leading-[1.8]">
-                      {paragraph}
-                    </p>
-                  ))}
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                {/* Button 1: Edit Post (Primary blue button) */}
+                <Link
+                  to={`/blog/edit/${post.id}`}
+                  className="inline-flex items-center justify-center px-5 py-2.5 bg-[#4338CA] hover:bg-[#3730A3] active:bg-[#312E81] text-white rounded-lg text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                  title="Edit full blog content in rich-text editor"
+                >
+                  <span>Edit Post</span>
+                </Link>
+
+                {/* Button 2: Preview Post Button (Switches to in-page reader preview) */}
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewMode(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs hover:border-slate-400 transition-all cursor-pointer"
+                  title="Preview article in full reader mode on this page"
+                >
+                  <Eye className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Preview Post</span>
+                </button>
+
+                {/* Button 3: Edit Details Button (Opens smooth wide sidebar drawer) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBlogDetails({
+                      title: post.title || '',
+                      description: post.excerpt || post.subtitle || post.seoDescription || '',
+                      image: post.featuredImage || post.image || '',
+                      readTime: extractMinutes(post.readTime || post.readingTime || '1'),
+                      labelName: post.label_name || post.labelName || post.categoryName || post.category || '',
+                    });
+                    setSaveError('');
+                    setDrawerMode('details');
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs hover:border-slate-400 transition-all cursor-pointer"
+                  title="Edit title, description, cover image, read time, and label name"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Edit Details</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── 3. BOX 3: Meta Details Box ── */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-7 space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Meta Details
+                </h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Manage meta title and description for search engine optimization and preview snippets.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMetaDetails({
+                      seoTitle: post.seoTitle || post.title || '',
+                      seoDescription: post.seoDescription || post.excerpt || post.subtitle || '',
+                    });
+                    setSaveError('');
+                    setDrawerMode('meta');
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#4338CA] hover:bg-[#3730A3] active:bg-[#312E81] text-white rounded-lg text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                  title="Open sidebar to edit meta title and description"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Edit Meta Details</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── 4. BOX 4: Delete Post / Danger Zone (Wrapped box at the bottom) ── */}
+            <div className="bg-white rounded-2xl border border-rose-200/90 shadow-xs p-6 sm:p-7 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-rose-700 tracking-tight flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-rose-600" />
+                    <span>Delete Post</span>
+                  </h2>
+                  <p className="text-sm text-slate-600 mt-1 max-w-xl leading-relaxed">
+                    Once you delete this post, there is no going back. All article content, images, and search engine references will be permanently removed.
+                  </p>
                 </div>
-              )}
+
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(true)}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 hover:text-rose-800 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer shrink-0"
+                  title="Delete post permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Delete Post</span>
+                </button>
+              </div>
             </div>
           </div>
-        </article>
+        ) : (
+          /* ============================================================== */
+          /* MODE 2: IN-PAGE READER PREVIEW (Clean Unwrapped Layout)        */
+          /* ============================================================== */
+          <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-2">
+            <article className="space-y-8">
+              {/* Title & Subtitle Header */}
+              <header className="space-y-4">
+                <h1 className="font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 leading-tight">
+                  {blogDetails.title || post.title || 'Untitled Blog Post'}
+                </h1>
 
-        {/* ── Right: Sidebar (View Details by Default / Ghost Edit Settings on Click) ── */}
-        <aside className="lg:col-span-4 space-y-4 sticky top-[72px] self-start animate-fade-in select-none">
-          {!isEditSettingsOpen ? (
-            /* ================= VIEW MODE: CLEAN ARTICLE PROPERTIES ================= */
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-              <div className="flex items-center pb-3 border-b border-slate-100">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Article Properties</span>
-                </h3>
-              </div>
+                {(blogDetails.description || post.excerpt || post.subtitle || post.seoDescription) && (
+                  <p className="font-medium-sans italic text-lg sm:text-xl text-zinc-600 font-light leading-relaxed my-3.5">
+                    {blogDetails.description || post.excerpt || post.subtitle || post.seoDescription}
+                  </p>
+                )}
 
-              {/* View details table */}
-              <div className="space-y-0 text-xs">
-                {[
-                  { label: 'Live Status', value: post.status, isStatus: true },
-                  { label: 'Label Name', value: postSettings.labelName || post.label_name || post.labelName || post.categoryName || post.category || '—', isCategory: true },
-                  { label: 'SEO Title', value: postSettings.seoTitle || post.seoTitle || post.seo_title || post.title || '—' },
-                  { label: 'SEO Description', value: postSettings.seoDescription || post.seoDescription || post.seo_description || postSettings.subtitle || post.excerpt || '—' },
-                  { label: 'Published Date', value: post.publishedAt ? post.publishedAt.split('T')[0] : 'Not published yet' },
-                  { label: 'Read Time', value: post.readTime || post.readingTime || '1 min read' },
-                  { label: 'Author', value: post.author || 'Energy Autonomy' },
-                ].map((item, i) => (
-                  <div key={i} className="flex justify-between py-2.5 border-b border-slate-50 last:border-0 items-center gap-2">
-                    <span className="text-slate-500 font-medium shrink-0">{item.label}</span>
-                    <span className={`font-bold truncate text-right ${
-                      item.isCategory ? 'text-[#8F3EC9]' :
-                      item.isStatus ? (post.status === 'published' ? 'text-emerald-600' : 'text-amber-600') :
-                      'text-slate-800'
-                    }`}>
-                      {item.value}
-                    </span>
+                {/* Author Meta Bar with EA Avatar Badge */}
+                <div className="flex items-center justify-between pt-4 border-t border-b border-zinc-200 py-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-[#8F3EC9] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                      EA
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-semibold text-zinc-900">
+                        {post.author || 'Energy Autonomy'}
+                      </h5>
+                      <p className="text-xs text-zinc-500">
+                        {isPublished ? 'Published' : 'Draft'} • {extractMinutes(blogDetails.readTime || post.readTime || post.readingTime || '1')} min read
+                      </p>
+                    </div>
                   </div>
-                ))}
+
+                  {(blogDetails.labelName || post.label_name || post.labelName || post.categoryName) && (
+                    <span className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
+                      {blogDetails.labelName || post.label_name || post.labelName || post.categoryName}
+                    </span>
+                  )}
+                </div>
+              </header>
+
+              {/* Cover Image in Reader View */}
+              {Boolean(getBlogImage(blogDetails.image || post.featuredImage || post.image)) && (
+                <div className="w-full max-h-80 sm:max-h-96 rounded-2xl overflow-hidden shadow-md border border-zinc-200/80 bg-zinc-100">
+                  <img
+                    src={getBlogImage(blogDetails.image || post.featuredImage || post.image)}
+                    alt={post.title}
+                    className="w-full h-full object-cover max-h-80 sm:max-h-96"
+                  />
+                </div>
+              )}
+
+              {/* Rendered Body Preview */}
+              <div className="prose prose-lg max-w-none font-medium-serif text-lg sm:text-xl leading-relaxed text-zinc-800">
+                {hasRichContent ? (
+                  <MediumEditor initialContent={post.contentJson} editable={false} />
+                ) : post.contentJson ? (
+                  renderTiptapNode(post.contentJson, 0)
+                ) : (
+                  <div className="space-y-4 text-base sm:text-lg text-zinc-800 leading-relaxed whitespace-pre-wrap">
+                    {(post.content || post.description || 'No article content available.').split('\n\n').filter(Boolean).map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* Article Tags / Category Footer */}
+              <div className="pt-8 border-t border-zinc-200 flex items-center gap-2 flex-wrap">
+                {(blogDetails.labelName || post.label_name || post.labelName || post.categoryName) && (
+                  <span className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
+                    #{blogDetails.labelName || post.label_name || post.labelName || post.categoryName}
+                  </span>
+                )}
+                {post.tags &&
+                  (Array.isArray(post.tags) ? post.tags : (post.tags || '').split(','))
+                    .map((t) => (typeof t === 'string' ? t.trim() : t?.name || ''))
+                    .filter(Boolean)
+                    .map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+              </div>
+            </article>
+
+            {/* Bottom Footer Controls */}
+            <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsPreviewMode(false)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Overview</span>
+              </button>
+
+              <Link
+                to={`/blog/edit/${post.id}`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#4338CA] hover:bg-[#3730A3] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Edit Full Article</span>
+              </Link>
             </div>
-          ) : (
-            /* ================= EDIT MODE: EXACT POPUP FIELDS AS PUBLISH DRAWER ================= */
-            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden animate-fade-in">
-              {/* Settings Header */}
-              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+          </div>
+        )}
+      </div>
+
+      {/* ── 5. RIGHT-SIDE SLIDE-OVER SIDEBAR DRAWER (Smooth Slide-In From Right) ── */}
+      {drawerMode && (
+        <div className="fixed inset-0 z-50 overflow-hidden select-none font-sans">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs animate-backdrop-fade"
+            onClick={() => setDrawerMode(null)}
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10 pointer-events-none">
+            <div className="w-screen max-w-2xl sm:max-w-3xl bg-white shadow-2xl flex flex-col pointer-events-auto border-l border-slate-200 animate-drawer-slide-in">
+              {/* Drawer Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
-                    Publish Article
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    {drawerMode === 'meta' ? 'Edit Meta Details' : 'Edit Blog Details'}
                   </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                    <span>All fields marked with</span>
-                    <span className="text-rose-500 font-bold">*</span>
-                    <span>are compulsory to publish</span>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {drawerMode === 'meta'
+                      ? 'Update meta title and description for search engines & previews'
+                      : 'Update title, description, cover image, read time, and label name'}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsEditSettingsOpen(false)}
+                  onClick={() => setDrawerMode(null)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
-                  title="Close settings (Return to View)"
+                  title="Close sidebar"
                 >
-                  <PanelRightClose className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Settings Body */}
-              <div className="p-5 space-y-5 text-xs">
+              {/* Drawer Body */}
+              <div ref={drawerBodyRef} className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
                 {/* Error Banner */}
                 {saveError && (
-                  <div className="flex items-center justify-between gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-lg animate-fade-in">
-                    <span>{saveError}</span>
+                  <div className="flex items-center justify-between gap-2 p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-lg animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>{saveError}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setSaveError('')}
-                      className="text-red-400 hover:text-red-700 text-sm cursor-pointer"
+                      className="text-rose-400 hover:text-rose-700 text-sm font-bold cursor-pointer"
                     >
                       ✕
                     </button>
                   </div>
                 )}
 
-                {/* Save Feedback Banner */}
-                {saveSuccess && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2 animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Post settings updated successfully!</span>
+                {/* ── META DETAILS DRAWER MODE: Only Meta Title & Meta Description ── */}
+                {drawerMode === 'meta' && (
+                  <div className="space-y-5">
+                    {/* Meta Title */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Meta Title <span className="text-red-500">*</span>
+                        </label>
+                        <span className={`text-[10px] ${metaDetails.seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                          {metaDetails.seoTitle.length}/60 chars
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={metaDetails.seoTitle}
+                        onChange={(e) => {
+                          setMetaDetails((prev) => ({ ...prev, seoTitle: e.target.value }));
+                          if (saveError) setSaveError('');
+                        }}
+                        placeholder="Enter SEO meta title..."
+                        className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Meta Description */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Meta Description <span className="text-red-500">*</span>
+                        </label>
+                        <span className={`text-[10px] ${metaDetails.seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                          {metaDetails.seoDescription.length}/160 chars
+                        </span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={metaDetails.seoDescription}
+                        onChange={(e) => {
+                          setMetaDetails((prev) => ({ ...prev, seoDescription: e.target.value }));
+                          if (saveError) setSaveError('');
+                        }}
+                        placeholder="Enter concise search engine meta description..."
+                        className="w-full px-3.5 py-2.5 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none resize-none leading-relaxed transition-all"
+                      />
+                    </div>
                   </div>
                 )}
 
-                {/* --- Section 1: Story Preview --- */}
-                <div className="space-y-4">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                    <span>Story Preview</span>
-                  </h4>
+                {/* ── BLOG DETAILS DRAWER MODE: Clean form fields ── */}
+                {drawerMode === 'details' && (
+                  <div className="space-y-5">
+                    {/* 1. Cover Image */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Cover Image
+                      </label>
 
-                  {/* Cover Image Field */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Cover Image <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    {postSettings.coverImage ? (
-                      <div className="relative w-full h-36 rounded-xl overflow-hidden border border-slate-200 group">
-                        <img
-                          src={getBlogImage(postSettings.coverImage)}
-                          alt="Cover Preview"
-                          className="w-full h-full object-cover"
+                      {blogDetails.image ? (
+                        <div className="relative w-64 sm:w-72 h-36 rounded-lg overflow-hidden border border-slate-200 group bg-slate-100 shadow-2xs">
+                          <img
+                            src={getBlogImage(blogDetails.image)}
+                            alt="Cover Preview"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <label className="px-3 py-1.5 bg-white text-slate-800 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition-colors shadow-sm">
+                              Change Image
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleRemoveImage}
+                              className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors cursor-pointer shadow-sm"
+                              title="Remove Cover Image"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-64 sm:w-72 p-4 border-2 border-dashed border-slate-200 bg-slate-50/60 rounded-lg text-center hover:bg-purple-50/20 hover:border-purple-300 transition-all">
+                          {uploadingImage ? (
+                            <div className="flex items-center justify-center gap-2 py-3 text-xs font-semibold text-[#8F3EC9]">
+                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                              <span>Uploading image...</span>
+                            </div>
+                          ) : (
+                            <label className="cursor-pointer block py-1">
+                              <ImageIcon className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                              <span className="text-xs font-semibold text-[#8F3EC9] hover:underline block">
+                                Upload a cover image
+                              </span>
+                              <span className="text-[10px] text-slate-400 block mt-0.5">
+                                Recommended: 16:9 image
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Title Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={blogDetails.title}
+                        onChange={(e) => {
+                          setBlogDetails((prev) => ({ ...prev, title: e.target.value }));
+                          if (saveError) setSaveError('');
+                        }}
+                        placeholder="Article title..."
+                        className="w-full px-3.5 py-2.5 bg-white text-sm font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* 3. Subtitle / Summary Excerpt Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Subtitle / Summary Excerpt <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={blogDetails.description}
+                        onChange={(e) => {
+                          setBlogDetails((prev) => ({ ...prev, description: e.target.value }));
+                          if (saveError) setSaveError('');
+                        }}
+                        placeholder="Write a brief subtitle or summary for readers..."
+                        className="w-full px-3.5 py-2 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none resize-none leading-relaxed transition-all"
+                      />
+                    </div>
+
+                    {/* 4. Label Name & Estimated Read Time Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Label Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={blogDetails.labelName}
+                          onChange={(e) => {
+                            setBlogDetails((prev) => ({ ...prev, labelName: e.target.value }));
+                            if (saveError) setSaveError('');
+                          }}
+                          placeholder="e.g. ENERGY & AWARENESS"
+                          className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <label className="px-3 py-1.5 bg-white text-slate-800 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition-colors shadow-sm">
-                            Change Image
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverUpload}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={handleRemoveCover}
-                            className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors cursor-pointer shadow-sm"
-                            title="Remove Cover Image"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Estimated Read Time <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={blogDetails.readTime}
+                            onChange={(e) => {
+                              const countOnly = e.target.value.replace(/\D/g, '');
+                              setBlogDetails((prev) => ({ ...prev, readTime: countOnly }));
+                              if (saveError) setSaveError('');
+                            }}
+                            placeholder="e.g. 5"
+                            className="w-full pl-3.5 pr-20 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                          />
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-xs text-slate-400 font-medium">
+                            min read
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <div className="p-4 border-2 border-dashed border-slate-200 bg-slate-50/60 rounded-xl text-center hover:bg-purple-50/20 hover:border-purple-300 transition-all">
-                        {uploadingCover ? (
-                          <div className="flex items-center justify-center gap-2 py-2 text-xs font-semibold text-[#8F3EC9]">
-                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            <span>Uploading image...</span>
-                          </div>
-                        ) : (
-                          <label className="cursor-pointer block py-1">
-                            <ImageIcon className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-                            <span className="text-xs font-semibold text-[#8F3EC9] hover:underline block">
-                              Upload a cover image
-                            </span>
-                            <span className="text-[10px] text-slate-400 block mt-0.5">
-                              Recommended: 16:9 high resolution image
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverUpload}
-                              className="hidden"
-                            />
-                          </label>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Title Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Title <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={postSettings.title}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPostSettings((prev) => ({
-                          ...prev,
-                          title: val,
-                          ...(!isSeoTitleEdited ? { seoTitle: val } : {}),
-                        }));
-                        if (saveError) setSaveError('');
-                      }}
-                      placeholder="Article title..."
-                      className="w-full px-3 py-2 bg-white text-xs font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all"
-                    />
-                  </div>
-
-                  {/* Subtitle / Summary Excerpt */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Subtitle / Summary Excerpt <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={postSettings.subtitle}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPostSettings((prev) => ({
-                          ...prev,
-                          subtitle: val,
-                          ...(!isSeoDescriptionEdited ? { seoDescription: val } : {}),
-                        }));
-                        if (saveError) setSaveError('');
-                      }}
-                      placeholder="Write a brief subtitle or summary for readers..."
-                      className="w-full px-3 py-2 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100" />
-
-                {/* --- Section 2: Label Settings --- */}
-                <div className="space-y-3">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Bookmark className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                    <span>Label Settings</span>
-                  </h4>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Label Name <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={postSettings.labelName}
-                      onChange={(e) => {
-                        setPostSettings((prev) => ({ ...prev, labelName: e.target.value }));
-                        if (saveError) setSaveError('');
-                      }}
-                      placeholder="Enter label name (e.g. ENERGY & AWARENESS)..."
-                      className="w-full px-3 py-2 bg-white text-xs font-semibold text-slate-800 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      The primary topic label displayed on the article card and page.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100" />
-
-                {/* --- Section 3: SEO Settings --- */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                      <span>SEO Settings</span>
-                    </h4>
-                    {(isSeoTitleEdited || isSeoDescriptionEdited) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSeoTitleEdited(false);
-                          setIsSeoDescriptionEdited(false);
-                          setPostSettings((prev) => ({
-                            ...prev,
-                            seoTitle: prev.title,
-                            seoDescription: prev.subtitle,
-                          }));
-                        }}
-                        className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
-                        title="Reset SEO fields to match title and subtitle"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>Reset SEO</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* SEO Title */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        SEO Title
-                      </label>
-                      <span className={`text-[10px] ${postSettings.seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
-                        {postSettings.seoTitle.length}/60 chars
-                      </span>
                     </div>
-                    <input
-                      type="text"
-                      value={postSettings.seoTitle}
-                      onChange={(e) => {
-                        setPostSettings((prev) => ({ ...prev, seoTitle: e.target.value }));
-                        setIsSeoTitleEdited(true);
-                        if (saveError) setSaveError('');
-                      }}
-                      placeholder="Enter SEO meta title..."
-                      className="w-full px-3 py-2 bg-white text-xs font-semibold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Title tag displayed in search engine results and browser tabs.
-                    </p>
                   </div>
+                )}
+              </div>
 
-                  {/* SEO Description */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        SEO Description
-                      </label>
-                      <span className={`text-[10px] ${postSettings.seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
-                        {postSettings.seoDescription.length}/160 chars
-                      </span>
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={postSettings.seoDescription}
-                      onChange={(e) => {
-                        setPostSettings((prev) => ({ ...prev, seoDescription: e.target.value }));
-                        setIsSeoDescriptionEdited(true);
-                        if (saveError) setSaveError('');
-                      }}
-                      placeholder="Enter SEO meta description..."
-                      className="w-full px-3 py-2 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Summary snippet displayed beneath your page title in Google search results.
-                    </p>
-                  </div>
-                </div>
+              {/* Drawer Footer */}
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-slate-50/70">
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode(null)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
 
-                {/* Footer Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditSettingsOpen(false)}
-                    className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSavePostSettings}
-                    disabled={isSavingSettings}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] disabled:opacity-75 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
-                  >
-                    {isSavingSettings ? (
-                      <>
-                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                          <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Save Post Settings</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={drawerMode === 'meta' ? handleSaveMetaDetails : handleSaveBlogDetails}
+                  disabled={isSavingDetails}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-70 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+                >
+                  {isSavingDetails ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          )}
-        </aside>
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
