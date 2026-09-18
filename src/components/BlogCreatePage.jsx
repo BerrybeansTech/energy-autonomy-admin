@@ -21,7 +21,9 @@ import {
   Link as LinkIcon,
   RotateCcw,
   AlertCircle,
-  Globe
+  Globe,
+  SlidersHorizontal,
+  Check
 } from 'lucide-react'
 
 /**
@@ -140,6 +142,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [isPublishing, setIsPublishing] = useState(false)
   const [isPublishSuccess, setIsPublishSuccess] = useState(false)
   const [isPublishDrawerOpen, setIsPublishDrawerOpen] = useState(false)
+  const [drawerMode, setDrawerMode] = useState('publish') // 'publish' | 'meta'
+  const [readTime, setReadTime] = useState('1')
   const [isOpeningDrawer, setIsOpeningDrawer] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true)
@@ -329,6 +333,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         } else {
           setLabelName('')
         }
+        const existingReadTime = existing.read_time || existing.readTime || existing.reading_time || existing.readingTime
+        if (existingReadTime) {
+          setReadTime(String(existingReadTime).replace(/\D/g, '') || '1')
+        }
         const content = existing.content_json || existing.contentJson
         if (content && typeof content === 'object' && content.type === 'doc') {
           setEditorJson(content)
@@ -443,6 +451,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       contentJson: overrides.contentJson !== undefined ? overrides.contentJson : editorJson,
       featuredImage: overrides.featuredImage !== undefined ? overrides.featuredImage : (coverImage || null),
       labelName: currentLabel,
+      readTime: overrides.readTime !== undefined ? overrides.readTime : (readTime ? `${readTime} min read` : '1 min read'),
+      readingTime: overrides.readingTime !== undefined ? overrides.readingTime : (readTime ? `${readTime} min read` : '1 min read'),
       seoTitle: overrides.seoTitle !== undefined ? overrides.seoTitle : ((seoTitle && seoTitle.trim()) ? seoTitle.trim() : (currentTitle || null)),
       seoDescription: overrides.seoDescription !== undefined ? overrides.seoDescription : ((seoDescription && seoDescription.trim()) ? seoDescription.trim() : (subtitle || null)),
       status: existingPostStatus === 'published' ? 'published' : 'draft',
@@ -734,12 +744,15 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         })
       }
 
+      const formattedReadTime = readTime && readTime.trim() ? `${readTime.trim()} min read` : `${readingTime} min read`
       const postPayload = {
         title: cleanTitle,
         slug: finalSlug,
         contentJson: editorJson,
         featuredImage: coverImage,
         labelName: finalLabelName,
+        readTime: formattedReadTime,
+        readingTime: formattedReadTime,
         seoTitle: finalSeoTitle,
         seoDescription: finalSeoDescription,
         status: 'published',
@@ -847,6 +860,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       setAutosaveStatus('error')
     } finally {
       setIsOpeningDrawer(false)
+      setDrawerMode('publish')
       setIsPublishDrawerOpen(true)
       setTimeout(() => {
         if (publishDrawerBodyRef.current) {
@@ -1334,73 +1348,76 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               )}
             </div>
 
-            {/* Title Input (Multiline Auto-expanding) */}
-            <div className="pt-2">
-              <textarea
-                ref={titleTextareaRef}
-                rows={1}
-                value={title}
-                onChange={handleTitleChange}
-                onBlur={() => {
-                  if (postId || createdDraftIdRef.current) {
-                    saveToDatabase()
-                  }
-                }}
-                placeholder="Title"
-                className="w-full font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent resize-none overflow-hidden leading-tight block"
-              />
-            </div>
-
-            {/* Subtitle Input */}
-            {(showSubtitleInput || subtitle) && (
-              <div className="relative flex items-start group/sub animate-fade-in my-2">
+            {/* Title & Subtitle Header Block */}
+            <div className="space-y-1.5 pt-1">
+              {/* Title Input (Multiline Auto-expanding) */}
+              <div>
                 <textarea
-                  ref={subtitleTextareaRef}
+                  ref={titleTextareaRef}
                   rows={1}
-                  autoFocus={showSubtitleInput && !subtitle}
-                  value={subtitle}
-                  onChange={(e) => {
-                    hasUserInteractedRef.current = true
-                    const val = e.target.value
-                    setSubtitle(val)
-                    if (!isSeoDescriptionEdited) {
-                      setSeoDescription(val)
-                    }
-                    if (val.trim().length > 0 && !postId && !createdDraftIdRef.current) {
-                      ensureDraftId({ seoDescription: val })
-                    }
-                  }}
+                  value={title}
+                  onChange={handleTitleChange}
                   onBlur={() => {
                     if (postId || createdDraftIdRef.current) {
                       saveToDatabase()
                     }
                   }}
-                  placeholder="Write a subtitle or brief summary..."
-                  className="w-full font-medium-sans italic text-lg sm:text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent pr-8 resize-none overflow-hidden leading-relaxed block"
+                  placeholder="Title"
+                  className="w-full font-lora text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent resize-none overflow-hidden leading-tight block"
                 />
-                <button
-                  type="button"
-                  onClick={() => {
-                    hasUserInteractedRef.current = true
-                    setSubtitle('')
-                    setShowSubtitleInput(false)
-                    if (!isSeoDescriptionEdited) {
-                      setSeoDescription('')
-                    }
-                  }}
-                  className="absolute right-0 top-1 text-slate-700 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                  title="Remove Subtitle"
-                >
-                  <X className="w-4 h-4" strokeWidth={2.2} />
-                </button>
               </div>
-            )}
 
-            {/* Default Divider Line under Subtitle / Header */}
-            <div className="border-b border-zinc-200/80 my-4" />
+              {/* Subtitle Input */}
+              {(showSubtitleInput || subtitle) && (
+                <div className="relative flex items-start group/sub animate-fade-in pt-0.5">
+                  <textarea
+                    ref={subtitleTextareaRef}
+                    rows={1}
+                    autoFocus={showSubtitleInput && !subtitle}
+                    value={subtitle}
+                    onChange={(e) => {
+                      hasUserInteractedRef.current = true
+                      const val = e.target.value
+                      setSubtitle(val)
+                      if (!isSeoDescriptionEdited) {
+                        setSeoDescription(val)
+                      }
+                      if (val.trim().length > 0 && !postId && !createdDraftIdRef.current) {
+                        ensureDraftId({ seoDescription: val })
+                      }
+                    }}
+                    onBlur={() => {
+                      if (postId || createdDraftIdRef.current) {
+                        saveToDatabase()
+                      }
+                    }}
+                    placeholder="Write a subtitle or brief summary..."
+                    className="w-full font-medium-sans italic text-lg sm:text-xl font-light text-zinc-600 placeholder:text-zinc-300 border-none outline-none focus:ring-0 p-0 m-0 bg-transparent pr-8 resize-none overflow-hidden leading-relaxed block"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      hasUserInteractedRef.current = true
+                      setSubtitle('')
+                      setShowSubtitleInput(false)
+                      if (!isSeoDescriptionEdited) {
+                        setSeoDescription('')
+                      }
+                    }}
+                    className="absolute right-0 top-1 text-slate-700 hover:text-slate-900 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Remove Subtitle"
+                  >
+                    <X className="w-4 h-4" strokeWidth={2.2} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Divider Line under Subtitle / Header */}
+            <div className="border-b border-zinc-200/80 !mt-2 !mb-0.5" />
 
             {/* Core Medium Tiptap Editor Component */}
-            <div>
+            <div className="!mt-0">
               <MediumEditor
                 onJsonUpdate={(json) => {
                   setEditorJson(json)
@@ -1476,33 +1493,54 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* RIGHT-SIDE PUBLISH DRAWER / POPUP MODAL                       */}
+      {/* RIGHT-SIDE PUBLISH & METADATA DRAWER                          */}
       {/* ------------------------------------------------------------- */}
       {isPublishDrawerOpen && (
         <div className="fixed inset-0 z-50 overflow-hidden select-none">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-fade-in"
-            onClick={() => setIsPublishDrawerOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs animate-backdrop-fade"
+            onClick={() => {
+              setIsPublishDrawerOpen(false)
+              setDrawerMode('publish')
+            }}
           />
 
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-lg bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out border-l border-slate-200 animate-slide-in-right">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10 pointer-events-none">
+            <div className="w-screen max-w-xl bg-white shadow-2xl flex flex-col pointer-events-auto border-l border-slate-200 animate-drawer-slide-in">
               {/* Drawer Header */}
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
                 <div>
+                  {drawerMode === 'meta' && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerMode('publish')}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#8F3EC9] hover:underline mb-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Publish Settings</span>
+                    </button>
+                  )}
                   <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                    {existingPostStatus === 'published' ? 'Review & Update Post' : 'Publish Article'}
+                    {drawerMode === 'meta'
+                      ? 'Edit Meta Details'
+                      : (existingPostStatus === 'published' || Boolean(routeId) ? 'Publish Settings' : 'Publish Settings')}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                    <span>All fields marked with</span>
-                    <span className="text-rose-500 font-bold">*</span>
-                    <span>are compulsory to publish</span>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {drawerMode === 'meta'
+                      ? 'Configure SEO title and meta description for search engines'
+                      : 'Review story preview, label, and reading details before publishing'}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsPublishDrawerOpen(false)}
+                  onClick={() => {
+                    if (drawerMode === 'meta') {
+                      setDrawerMode('publish')
+                    } else {
+                      setIsPublishDrawerOpen(false)
+                    }
+                  }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
                   title="Close"
                 >
@@ -1511,10 +1549,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               </div>
 
               {/* Drawer Body */}
-              <div ref={publishDrawerBodyRef} className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div ref={publishDrawerBodyRef} className="flex-1 overflow-y-auto p-6">
                 {/* Error Banner if any */}
                 {errorMessage && (
-                  <div className="flex items-center justify-between gap-2 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-fade-in">
+                  <div className="flex items-center justify-between gap-2 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl animate-fade-in mb-5">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                       <span>{errorMessage}</span>
@@ -1522,267 +1560,308 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     <button
                       type="button"
                       onClick={() => setErrorMessage('')}
-                      className="text-red-400 hover:text-red-700 text-sm"
+                      className="text-red-400 hover:text-red-700 text-sm cursor-pointer"
                     >
                       ✕
                     </button>
                   </div>
                 )}
 
-                {/* --- Section 1: Story Preview (Cover Image, Title, Subtitle) --- */}
-                <div className="space-y-4">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                    Story Preview
-                  </h4>
+                {/* ── META DETAILS DRAWER MODE: SEO Settings ── */}
+                {drawerMode === 'meta' && (
+                  <div className="space-y-5">
+                    {/* Meta Title */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Meta Title <span className="text-red-500">*</span>
+                        </label>
+                        <span className={`text-[10px] ${seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                          {seoTitle.length}/60 chars
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={seoTitle}
+                        onChange={(e) => {
+                          setSeoTitle(e.target.value)
+                          setIsSeoTitleEdited(true)
+                          if (errorMessage) setErrorMessage('')
+                        }}
+                        placeholder="Enter concise search engine title..."
+                        className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Title tag displayed in search engine results and browser tabs.
+                      </p>
+                    </div>
 
-                  {/* Cover Image Field */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Cover Image <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    {coverImage ? (
-                      <div className="relative w-full h-44 rounded-xl overflow-hidden border border-slate-200 group">
-                        <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <label className="px-3 py-1.5 bg-white text-slate-800 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition-colors shadow-sm">
-                            Change Image
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverUpload}
-                              className="hidden"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={handleRemoveCoverImage}
-                            className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors cursor-pointer shadow-sm"
-                            title="Remove Cover Image"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                    {/* Meta Description */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Meta Description <span className="text-red-500">*</span>
+                        </label>
+                        <span className={`text-[10px] ${seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
+                          {seoDescription.length}/160 chars
+                        </span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={seoDescription}
+                        onChange={(e) => {
+                          setSeoDescription(e.target.value)
+                          setIsSeoDescriptionEdited(true)
+                          if (errorMessage) setErrorMessage('')
+                        }}
+                        placeholder="Enter concise search engine meta description..."
+                        className="w-full px-3.5 py-2.5 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none resize-none leading-relaxed transition-all"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Summary snippet displayed beneath your page title in Google search results.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── PUBLISH SETTINGS DRAWER MODE: Story & Reading Details ── */}
+                {drawerMode === 'publish' && (
+                  <div className="space-y-5">
+                    {/* 1. Cover Image */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Cover Image <span className="text-red-500">*</span>
+                      </label>
+                      {coverImage ? (
+                        <div className="relative w-64 sm:w-72 h-36 rounded-lg overflow-hidden border border-slate-200 group bg-slate-100 shadow-2xs">
+                          <img
+                            src={coverImage.startsWith('http') || coverImage.startsWith('blob:') || coverImage.startsWith('data:') ? coverImage : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '')}${coverImage.startsWith('/') ? '' : '/'}${coverImage}`}
+                            alt="Cover Preview"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <label className="px-3 py-1.5 bg-white text-slate-800 text-xs font-bold rounded-lg cursor-pointer hover:bg-slate-100 transition-colors shadow-sm">
+                              Change Image
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleCoverUpload}
+                                className="hidden"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleRemoveCoverImage}
+                              className="p-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors cursor-pointer shadow-sm"
+                              title="Remove Cover Image"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-64 sm:w-72 p-4 border-2 border-dashed border-slate-200 bg-slate-50/60 rounded-lg text-center hover:bg-purple-50/20 hover:border-purple-300 transition-all">
+                          {uploadingCover ? (
+                            <div className="flex items-center justify-center gap-2 py-3 text-xs font-semibold text-[#8F3EC9]">
+                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                              <span>Uploading image...</span>
+                            </div>
+                          ) : (
+                            <label className="cursor-pointer block py-1">
+                              <ImageIcon className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                              <span className="text-xs font-semibold text-[#8F3EC9] hover:underline block">
+                                Upload a cover image
+                              </span>
+                              <span className="text-[10px] text-slate-400 block mt-0.5">
+                                Recommended: 16:9 image
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleCoverUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Title Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={handleTitleChange}
+                        placeholder="Article title..."
+                        className="w-full px-3.5 py-2.5 bg-white text-sm font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* 3. Subtitle / Summary Excerpt Input */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Subtitle / Summary Excerpt <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={subtitle}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setSubtitle(val)
+                          if (!isSeoDescriptionEdited) {
+                            setSeoDescription(val)
+                          }
+                          if (errorMessage) setErrorMessage('')
+                        }}
+                        placeholder="Write a brief subtitle or summary for readers..."
+                        className="w-full px-3.5 py-2 text-xs text-slate-700 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none resize-none leading-relaxed transition-all"
+                      />
+                    </div>
+
+                    {/* 4. Label Name & Estimated Read Time Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Label Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={labelName}
+                          onChange={(e) => {
+                            setLabelName(e.target.value)
+                            if (errorMessage) setErrorMessage('')
+                          }}
+                          placeholder="e.g. ENERGY & AWARENESS"
+                          className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Estimated Read Time <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={readTime}
+                            onChange={(e) => {
+                              const countOnly = e.target.value.replace(/\D/g, '')
+                              setReadTime(countOnly)
+                              if (errorMessage) setErrorMessage('')
+                            }}
+                            placeholder="e.g. 5"
+                            className="w-full pl-3.5 pr-20 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-lg border border-slate-200 focus:border-[#8F3EC9] focus:ring-0 outline-none transition-all"
+                          />
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-xs text-slate-400 font-medium">
+                            min read
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <div className={`p-5 border-2 border-dashed ${
-                        errorMessage.toLowerCase().includes('cover image') ? 'border-rose-300 bg-rose-50/30' : 'border-slate-200 bg-slate-50/60'
-                      } rounded-xl text-center hover:bg-purple-50/20 hover:border-purple-300 transition-all`}>
-                        {uploadingCover ? (
-                          <div className="flex items-center justify-center gap-2 py-3 text-xs font-semibold text-[#8F3EC9]">
-                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                              <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            <span>Uploading image to backend...</span>
+                    </div>
+
+                    {/* 5. Bottom Metadata Box with Button to Open Meta Sidebar */}
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 sm:p-4.5 space-y-3 mt-6">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <Globe className="w-4 h-4 text-[#8F3EC9]" />
+                            <h4 className="text-xs font-bold text-slate-900">SEO & Meta Details</h4>
                           </div>
-                        ) : (
-                          <label className="cursor-pointer block py-1">
-                            <ImageIcon className="w-7 h-7 text-slate-400 mx-auto mb-1.5" />
-                            <span className="text-xs font-semibold text-[#8F3EC9] hover:underline block">
-                              Upload a cover image
-                            </span>
-                            <span className="text-[11px] text-slate-400 block mt-0.5">
-                              Recommended: 16:9 high resolution image
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverUpload}
-                              className="hidden"
-                            />
-                          </label>
-                        )}
+                          <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                            Manage meta title and description for search engines and social preview cards.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDrawerMode('meta')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 active:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs hover:border-slate-400 transition-all cursor-pointer shrink-0"
+                          title="Open metadata sidebar"
+                        >
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Edit Metadata</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Title Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Title <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={handleTitleChange}
-                      placeholder="Article title..."
-                      className={`w-full px-3.5 py-2.5 bg-white text-sm font-bold text-slate-900 rounded-xl border ${
-                        !title.trim() && errorMessage.toLowerCase().includes('title') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all`}
-                    />
-                  </div>
-
-                  {/* Subtitle Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Subtitle / Summary Excerpt <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={subtitle}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setSubtitle(val)
-                        if (!isSeoDescriptionEdited) {
-                          setSeoDescription(val)
-                        }
-                        if (errorMessage) setErrorMessage('')
-                      }}
-                      placeholder="Write a brief subtitle or summary for readers..."
-                      className={`w-full px-3.5 py-2 text-xs text-slate-700 rounded-xl border ${
-                        !subtitle.trim() && errorMessage.toLowerCase().includes('subtitle') ? 'border-rose-400 ring-1 ring-rose-300' : 'border-slate-200'
-                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all`}
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100" />
-
-                {/* --- Section 2: Label Settings --- */}
-                <div className="space-y-4">
-                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Bookmark className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                    Label Settings
-                  </h4>
-
-                  {/* Label Name Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Label Name <span className="text-rose-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={labelName}
-                      onChange={(e) => {
-                        setLabelName(e.target.value)
-                        if (errorMessage) setErrorMessage('')
-                      }}
-                      placeholder="Enter label name (e.g. ENERGY & AWARENESS)..."
-                      className={`w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-800 rounded-xl border ${
-                        !labelName.trim() && errorMessage.toLowerCase().includes('label')
-                          ? 'border-rose-400 ring-1 ring-rose-300'
-                          : 'border-slate-200'
-                      } focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all`}
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      The primary topic label displayed on the article card and page.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100" />
-
-                {/* --- Section 3: SEO Settings (SEO Title, SEO Description) --- */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5 text-[#8F3EC9]" />
-                      SEO Settings
-                    </h4>
-                    {(isSeoTitleEdited || isSeoDescriptionEdited) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSeoTitleEdited(false)
-                          setIsSeoDescriptionEdited(false)
-                          setSeoTitle(title)
-                          setSeoDescription(subtitle)
-                        }}
-                        className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#8F3EC9] cursor-pointer"
-                        title="Reset SEO fields to match title and subtitle"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>Reset SEO</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* SEO Title Input */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        SEO Title
-                      </label>
-                      <span className={`text-[10px] ${seoTitle.length > 60 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
-                        {seoTitle.length}/60 chars
-                      </span>
+                      {(seoTitle || seoDescription) && (
+                        <div className="pt-2 border-t border-slate-200/60 space-y-1">
+                          {seoTitle && (
+                            <p className="text-[11px] text-slate-600 truncate">
+                              <span className="font-semibold text-slate-700">Meta Title:</span> {seoTitle}
+                            </p>
+                          )}
+                          {seoDescription && (
+                            <p className="text-[11px] text-slate-600 line-clamp-1">
+                              <span className="font-semibold text-slate-700">Meta Description:</span> {seoDescription}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <input
-                      type="text"
-                      value={seoTitle}
-                      onChange={(e) => {
-                        setSeoTitle(e.target.value)
-                        setIsSeoTitleEdited(true)
-                        if (errorMessage) setErrorMessage('')
-                      }}
-                      placeholder="Enter SEO meta title..."
-                      className="w-full px-3.5 py-2.5 bg-white text-xs font-semibold text-slate-900 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none transition-all"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Title tag displayed in search engine results and browser tabs.
-                    </p>
                   </div>
-
-                  {/* SEO Description Input */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        SEO Description
-                      </label>
-                      <span className={`text-[10px] ${seoDescription.length > 160 ? 'text-amber-500 font-semibold' : 'text-slate-400'}`}>
-                        {seoDescription.length}/160 chars
-                      </span>
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={seoDescription}
-                      onChange={(e) => {
-                        setSeoDescription(e.target.value)
-                        setIsSeoDescriptionEdited(true)
-                        if (errorMessage) setErrorMessage('')
-                      }}
-                      placeholder="Enter SEO meta description..."
-                      className="w-full px-3.5 py-2 text-xs text-slate-700 rounded-xl border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] outline-none resize-none leading-relaxed transition-all"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Summary snippet displayed beneath your page title in Google search results.
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Drawer Footer */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsPublishDrawerOpen(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
-                >
-                  Keep Editing
-                </button>
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-3 bg-slate-50/70">
+                {drawerMode === 'meta' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerMode('publish')}
+                      className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Back to Settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDrawerMode('publish')}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Apply Meta Details</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsPublishDrawerOpen(false)}
+                      className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={handlePublish}
-                  disabled={isPublishing}
-                  className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-xl shadow-md shadow-purple-500/15 hover:shadow-lg transition-all cursor-pointer"
-                >
-                  {isPublishing ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Updating Post...' : 'Publishing to Live Blog...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Update & Publish Article' : 'Post & Publish Article'}</span>
-                    </>
-                  )}
-                </button>
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      disabled={isPublishing}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-70 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer"
+                    >
+                      {isPublishing ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                            <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span>Publishing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Update Post' : 'Publish Article'}</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

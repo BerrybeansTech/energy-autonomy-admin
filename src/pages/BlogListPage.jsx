@@ -131,34 +131,11 @@ const BlogListPage = () => {
         </div>
       )}
 
-      {/* ── Page Header: Title + Refresh Button + Write Button ── */}
+      {/* ── Page Header: Title + Write Button ── */}
       <div className="flex items-center justify-between pt-2 pb-1">
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Blogs
-          </h1>
-          <button
-            type="button"
-            onClick={() => fetchPosts && fetchPosts()}
-            disabled={loading}
-            title="Reload blogs from server"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-[#8F3EC9] hover:bg-purple-50 transition-colors cursor-pointer mt-1"
-          >
-            <svg
-              className={`w-4 h-4 ${loading ? 'animate-spin text-[#8F3EC9]' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
-        </div>
+        <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+          Blogs
+        </h1>
 
         <Link
           to="/blog/create"
@@ -403,8 +380,8 @@ const BlogListPage = () => {
         isOpen={Boolean(deleteConfirm)}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={() => handleDeleteBlog(deleteConfirm)}
-        title="Delete blog?"
-        message="Are you sure you want to delete this blog? This action cannot be undone."
+        title="Delete blog post"
+        message="Are you sure you want to delete this blog post? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
@@ -415,22 +392,31 @@ const BlogListPage = () => {
                 <img
                   src={getBlogImage(deleteConfirm.image || deleteConfirm.featuredImage)}
                   alt={deleteConfirm.title}
-                  className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
+                  className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-[#8F3EC9]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-11 h-11 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                   </svg>
                 </div>
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-slate-900 truncate">
-                  {deleteConfirm.title}
+                  {deleteConfirm.title || 'Untitled Post'}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                  {deleteConfirm.readTime}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {deleteConfirm.topic && (
+                    <span className="text-[10px] font-medium text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">
+                      {deleteConfirm.topic}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-400">
+                    {deleteConfirm.readTime
+                      ? (deleteConfirm.readTime.includes('min') ? deleteConfirm.readTime : `${deleteConfirm.readTime} min read`)
+                      : '1 min read'}
+                  </span>
+                </div>
               </div>
             </div>
           )

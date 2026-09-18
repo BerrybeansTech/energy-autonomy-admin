@@ -374,26 +374,23 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
 
   return (
     <div ref={containerRef} className="relative w-full tiptap-editor">
-      {/* ------------------------------------------------------------- */}
-      {/* ROUNDED TOP TOOLBAR (Substack-Style, Admin Panel Native)      */}
-      {/* ------------------------------------------------------------- */}
       {editable && (
-        <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md py-2.5 mb-5 border-b border-slate-200 flex items-center gap-1 sm:gap-1.5 flex-wrap shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-          <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+        <div className="sticky top-0 z-40 bg-white pt-3 pb-2 mb-2 border-b border-slate-200/90 w-full">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
               {/* 1. History: Undo & Redo */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={!editor.can().undo()}
                 onClick={() => executeCommand((chain) => chain.undo().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.can().undo()
                     ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                     : 'text-slate-300 cursor-not-allowed'
                 }`}
                 title="Undo (Ctrl+Z)"
               >
-                <Undo className="w-[18px] h-[18px]" />
+                <Undo className="w-[21px] h-[21px]" />
               </button>
 
               <button
@@ -401,14 +398,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={!editor.can().redo()}
                 onClick={() => executeCommand((chain) => chain.redo().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.can().redo()
                     ? 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                     : 'text-slate-300 cursor-not-allowed'
                 }`}
                 title="Redo (Ctrl+Y)"
               >
-                <Redo className="w-[18px] h-[18px]" />
+                <Redo className="w-[21px] h-[21px]" />
               </button>
 
               <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
@@ -423,7 +420,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                     setShowColorPicker(false)
                     setShowHighlightPicker(false)
                   }}
-                  className={`h-9 px-3 rounded-xl text-[13px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  className={`h-10 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer ${
                     showStyleDropdown ||
                     editor.isActive('heading') ||
                     editor.isActive('blockquote') ||
@@ -438,7 +435,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 </button>
 
                 {showStyleDropdown && (
-                  <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-2xl shadow-xl border border-slate-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute top-full mt-2 left-0 w-48 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
@@ -446,7 +443,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                         executeCommand((chain) => chain.setParagraph().run())
                         setShowStyleDropdown(false)
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors ${
                         editor.isActive('paragraph') &&
                         !editor.isActive('heading') &&
                         !editor.isActive('blockquote') &&
@@ -471,7 +468,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                         executeCommand((chain) => chain.toggleHeading({ level: 1 }).run())
                         setShowStyleDropdown(false)
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-sm font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
                         editor.isActive('heading', { level: 1 })
                           ? 'bg-purple-50 text-[#8F3EC9]'
                           : 'text-slate-800 hover:bg-slate-50'
@@ -490,7 +487,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                         executeCommand((chain) => chain.toggleHeading({ level: 2 }).run())
                         setShowStyleDropdown(false)
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-serif font-bold flex items-center justify-between cursor-pointer transition-colors ${
                         editor.isActive('heading', { level: 2 })
                           ? 'bg-purple-50 text-[#8F3EC9]'
                           : 'text-slate-800 hover:bg-slate-50'
@@ -509,7 +506,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                         executeCommand((chain) => chain.toggleHeading({ level: 3 }).run())
                         setShowStyleDropdown(false)
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-serif font-semibold flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-serif font-semibold flex items-center justify-between cursor-pointer transition-colors ${
                         editor.isActive('heading', { level: 3 })
                           ? 'bg-purple-50 text-[#8F3EC9]'
                           : 'text-slate-800 hover:bg-slate-50'
@@ -532,9 +529,9 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBold().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-bold text-base select-none ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-semibold text-[17px] select-none ${
                   editor.isActive('bold')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Bold (Ctrl+B)"
@@ -547,9 +544,9 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleItalic().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer italic font-serif text-base font-semibold select-none ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer italic font-serif text-[17px] font-semibold select-none ${
                   editor.isActive('italic')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Italic (Ctrl+I)"
@@ -557,29 +554,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 I
               </button>
 
-              {/* Strikethrough (S) */}
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => executeCommand((chain) => chain.toggleStrike().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer line-through text-base font-semibold select-none ${
-                  editor.isActive('strike')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
-                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title="Strikethrough"
-              >
-                S
-              </button>
-
               {/* Inline Code (<>) */}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleCode().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-mono text-[13px] font-bold select-none ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer font-mono text-sm font-bold tracking-tight select-none ${
                   editor.isActive('code')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Inline Code"
@@ -597,22 +579,22 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                     setShowStyleDropdown(false)
                     setShowHighlightPicker(false)
                   }}
-                  className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
                     showColorPicker || editor.getAttributes('textStyle').color
-                      ? 'bg-purple-100 text-[#8F3EC9]'
+                      ? 'bg-purple-50 text-[#8F3EC9]'
                       : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                   title="Text Color"
                 >
-                  <span className="font-serif font-bold text-base leading-none">T</span>
+                  <span className="font-serif font-normal text-[17px] leading-none">T</span>
                   <span
-                    className="w-4.5 h-[3.5px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    className="w-4 h-[1.5px] rounded-full mt-0.5 transition-colors"
                     style={{ backgroundColor: currentColor || '#292929' }}
                   />
                 </button>
 
                 {showColorPicker && (
-                  <div className="absolute top-full mt-2 -left-12 sm:left-0 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute top-full mt-2 -left-12 sm:left-0 w-60 bg-white rounded-xl shadow-xl border border-slate-200 p-3.5 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                       Text Color
                     </div>
@@ -682,22 +664,22 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                     setShowStyleDropdown(false)
                     setShowColorPicker(false)
                   }}
-                  className={`w-9 h-9 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-colors cursor-pointer ${
                     showHighlightPicker || editor.isActive('highlight')
-                      ? 'bg-purple-100 text-[#8F3EC9]'
+                      ? 'bg-purple-50 text-[#8F3EC9]'
                       : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                   title="Text Highlight"
                 >
-                  <span className="font-serif font-bold text-base leading-none">A</span>
+                  <span className="font-serif font-normal text-[17px] leading-none">A</span>
                   <span
-                    className="w-4.5 h-[3.5px] rounded-full mt-0.5 shadow-2xs transition-colors"
+                    className="w-4 h-[1.5px] rounded-full mt-0.5 transition-colors"
                     style={{ backgroundColor: currentHighlightColor }}
                   />
                 </button>
 
                 {showHighlightPicker && (
-                  <div className="absolute top-full mt-2 -left-16 sm:left-0 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute top-full mt-2 -left-16 sm:left-0 w-52 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                       Highlight Color
                     </div>
@@ -713,7 +695,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                           title={preset.name}
                         >
                           {editor.isActive('highlight', { color: preset.color }) && (
-                            <Check className="w-3 h-3 text-slate-800" />
+                            <Check className="w-3.5 h-3.5 text-slate-800" />
                           )}
                         </button>
                       ))}
@@ -744,14 +726,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                   setLinkUrl(editor.getAttributes('link').href || '')
                   setShowLinkModal(true)
                 }}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('link')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Insert / Edit Link"
               >
-                <LinkIcon className="w-[18px] h-[18px]" />
+                <LinkIcon className="w-[21px] h-[21px]" />
               </button>
 
               {/* Image */}
@@ -759,10 +741,10 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setShowImageModal(true)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Insert Image"
               >
-                <ImageIcon className="w-[18px] h-[18px]" />
+                <ImageIcon className="w-[21px] h-[21px]" />
               </button>
 
               {/* Quote */}
@@ -770,14 +752,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBlockquote().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('blockquote')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Blockquote"
               >
-                <Quote className="w-[18px] h-[18px]" />
+                <Quote className="w-[21px] h-[21px]" />
               </button>
 
               {/* Divider Line */}
@@ -785,10 +767,10 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.setHorizontalRule().run())}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Insert Divider"
               >
-                <Minus className="w-[18px] h-[18px]" />
+                <Minus className="w-[21px] h-[21px]" />
               </button>
 
               <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
@@ -799,14 +781,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleBulletList().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('bulletList')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Bullet List"
               >
-                <List className="w-[18px] h-[18px]" />
+                <List className="w-[21px] h-[21px]" />
               </button>
 
               {/* Numbered List */}
@@ -814,14 +796,14 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => executeCommand((chain) => chain.toggleOrderedList().run())}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                   editor.isActive('orderedList')
-                    ? 'bg-purple-100 text-[#8F3EC9]'
+                    ? 'bg-purple-50 text-[#8F3EC9]'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                 }`}
                 title="Numbered List"
               >
-                <ListOrdered className="w-[18px] h-[18px]" />
+                <ListOrdered className="w-[21px] h-[21px]" />
               </button>
             </div>
           </div>
