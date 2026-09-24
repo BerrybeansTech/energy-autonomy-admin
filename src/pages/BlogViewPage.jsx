@@ -818,28 +818,6 @@ const BlogViewPage = () => {
                   </p>
                 )}
 
-                {/* Author Meta Bar with EA Avatar Badge */}
-                <div className="flex items-center justify-between pt-4 border-t border-b border-zinc-200 py-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-[#8F3EC9] text-white flex items-center justify-center font-bold text-sm shrink-0">
-                      EA
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-semibold text-zinc-900">
-                        {post.author || 'Energy Autonomy'}
-                      </h5>
-                      <p className="text-xs text-zinc-500">
-                        {isPublished ? 'Published' : 'Draft'} • {extractMinutes(blogDetails.readTime || post.readTime || post.readingTime || '1')} min read
-                      </p>
-                    </div>
-                  </div>
-
-                  {(blogDetails.labelName || post.label_name || post.labelName || post.categoryName) && (
-                    <span className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
-                      {blogDetails.labelName || post.label_name || post.labelName || post.categoryName}
-                    </span>
-                  )}
-                </div>
               </header>
 
               {/* Cover Image in Reader View */}
@@ -866,27 +844,6 @@ const BlogViewPage = () => {
                     ))}
                   </div>
                 )}
-              </div>
-
-              {/* Article Tags / Category Footer */}
-              <div className="pt-8 border-t border-zinc-200 flex items-center gap-2 flex-wrap">
-                {(blogDetails.labelName || post.label_name || post.labelName || post.categoryName) && (
-                  <span className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
-                    #{blogDetails.labelName || post.label_name || post.labelName || post.categoryName}
-                  </span>
-                )}
-                {post.tags &&
-                  (Array.isArray(post.tags) ? post.tags : (post.tags || '').split(','))
-                    .map((t) => (typeof t === 'string' ? t.trim() : t?.name || ''))
-                    .filter(Boolean)
-                    .map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
               </div>
             </article>
 

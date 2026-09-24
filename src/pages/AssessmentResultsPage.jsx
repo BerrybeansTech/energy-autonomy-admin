@@ -6,14 +6,10 @@ import {
   RefreshCw,
   Eye,
   Trash2,
-  ExternalLink,
-  Copy,
-  Check,
   Mail,
   Calendar,
-  Award,
-  Sparkles,
-  ChevronDown,
+  ClipboardCheck,
+  TrendingUp,
   CheckCircle2,
   HelpCircle,
   BarChart3,
@@ -42,7 +38,6 @@ export default function AssessmentResultsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
-  const [copiedLink, setCopiedLink] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
 
   const menuRef = useRef(null);
@@ -191,7 +186,7 @@ export default function AssessmentResultsPage() {
     return getGenieMeta(topKey).name;
   }, [stats]);
 
-  // Stat cards aligned with Dashboard stat card pattern
+  // Stat cards aligned with Dashboard stat card pattern (Professional admin line icons)
   const statCards = [
     {
       label: 'TOTAL SUBMISSIONS',
@@ -199,7 +194,7 @@ export default function AssessmentResultsPage() {
       sub: 'Completed quiz evaluations',
       iconBg: 'bg-purple-50 text-[#8F3EC9]',
       accentGradient: 'from-purple-500 to-violet-500',
-      icon: <Award className="w-5 h-5" />,
+      icon: <ClipboardCheck className="w-5 h-5" />,
     },
     {
       label: 'SUBMITTED TODAY',
@@ -215,7 +210,7 @@ export default function AssessmentResultsPage() {
       sub: 'Most common archetype',
       iconBg: 'bg-amber-50 text-amber-600',
       accentGradient: 'from-amber-500 to-orange-500',
-      icon: <Sparkles className="w-5 h-5" />,
+      icon: <TrendingUp className="w-5 h-5" />,
     },
     {
       label: 'RESULTS DELIVERED',
@@ -250,9 +245,9 @@ export default function AssessmentResultsPage() {
             <button
               type="button"
               onClick={() => setToastMessage(null)}
-              className="text-slate-400 hover:text-white ml-2 text-sm cursor-pointer"
+              className="text-slate-400 hover:text-white ml-2 cursor-pointer flex items-center justify-center"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
@@ -288,32 +283,6 @@ export default function AssessmentResultsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => copyResultUrl(selectedResult)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-2xs transition-all cursor-pointer"
-              title="Copy Quiz Result Link"
-            >
-              {copiedLink ? (
-                <Check className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <Copy className="w-4 h-4 text-slate-500" />
-              )}
-              <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
-            </button>
-
-            <a
-              href={`https://energyautonomy.com/quiz?result=${genieKey}&name=${encodeURIComponent(
-                selectedResult.name || ''
-              )}&id=${encodeURIComponent(selectedResult.resultId || selectedResult.result_id || selectedResult.id)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#8F3EC9] text-white hover:bg-[#7B2EB3] shadow-xs transition-colors cursor-pointer"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>Open in Quiz</span>
-            </a>
-
             <button
               type="button"
               onClick={() => setDeleteTarget(selectedResult)}
@@ -404,46 +373,7 @@ export default function AssessmentResultsPage() {
           </div>
         </div>
 
-        {/* ── 3. Full-Width Personal Result URL Bar ── */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px] shrink-0">
-              Personalized URL:
-            </span>
-            <span className="text-slate-800 font-mono text-xs select-all bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 flex-1 truncate">
-              https://energyautonomy.com/quiz?result={genieKey}&name=
-              {encodeURIComponent(selectedResult.name || '')}&id=
-              {encodeURIComponent(selectedResult.resultId || selectedResult.result_id || selectedResult.id)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => copyResultUrl(selectedResult)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold transition-colors cursor-pointer shadow-2xs"
-            >
-              {copiedLink ? (
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
-              )}
-              <span>{copiedLink ? 'Copied' : 'Copy'}</span>
-            </button>
-            <a
-              href={`https://energyautonomy.com/quiz?result=${genieKey}&name=${encodeURIComponent(
-                selectedResult.name || ''
-              )}&id=${encodeURIComponent(selectedResult.resultId || selectedResult.result_id || selectedResult.id)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#8F3EC9] text-white hover:bg-[#7B2EB3] rounded-xl font-bold transition-colors shadow-2xs"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open in Quiz</span>
-            </a>
-          </div>
-        </div>
-
-        {/* ── 4. Archetype Scores Distribution ── */}
+        {/* ── 3. Archetype Scores Distribution ── */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -605,9 +535,9 @@ export default function AssessmentResultsPage() {
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2 text-sm cursor-pointer"
+            className="text-slate-400 hover:text-white ml-2 cursor-pointer flex items-center justify-center"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -697,25 +627,13 @@ export default function AssessmentResultsPage() {
                     setSearch('');
                     setPage(1);
                   }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs w-4 h-4 flex items-center justify-center cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 w-4 h-4 flex items-center justify-center cursor-pointer"
                 >
-                  ✕
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Sort Dropdown */}
-            <div className="relative">
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50/80 border border-slate-200/80 rounded-xl focus:bg-white focus:outline-none focus:border-[#8F3EC9] cursor-pointer"
-              >
-                <option value="DESC">Newest First</option>
-                <option value="ASC">Oldest First</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
           </div>
         </div>
 
@@ -816,7 +734,7 @@ export default function AssessmentResultsPage() {
                   <td colSpan={5} className="py-14 text-center">
                     <div className="max-w-xs mx-auto flex flex-col items-center">
                       <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#8F3EC9] flex items-center justify-center mb-3 border border-purple-100">
-                        <Award className="w-6 h-6 opacity-60" />
+                        <ClipboardCheck className="w-6 h-6 opacity-60" />
                       </div>
                       <p className="text-sm font-semibold text-slate-800">
                         No assessment results found
@@ -941,18 +859,6 @@ export default function AssessmentResultsPage() {
                                   <span>View Full Report</span>
                                 </button>
 
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    copyResultUrl(row);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-                                >
-                                  <Copy className="w-4 h-4 text-slate-400 shrink-0" />
-                                  <span>Copy Result Link</span>
-                                </button>
 
                                 <div className="border-t border-slate-100 my-1" />
 

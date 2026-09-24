@@ -963,6 +963,39 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             )}
           </div>
 
+          {/* Assessment Results Item */}
+          <div className="relative group flex justify-center">
+            <Link
+              to="/assessments"
+              onClick={(e) => {
+                e.preventDefault()
+                handleProtectedNavigation(() => navigate('/assessments'))
+              }}
+              className={`transition-all duration-200 ${
+                isSidebarExpanded
+                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 p-0'
+              }`}
+            >
+              <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </span>
+              {isSidebarExpanded && (
+                <span className="whitespace-nowrap overflow-hidden text-[13.5px]">
+                  Assessment Results
+                </span>
+              )}
+            </Link>
+            {!isSidebarExpanded && (
+              <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900 text-white text-[11px] font-medium rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                Assessment Results
+              </div>
+            )}
+          </div>
+
           {/* Blog Management Item */}
           <div className="relative group flex justify-center">
             <Link
@@ -1451,20 +1484,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                 </p>
               )}
 
-              {/* Author Meta Bar */}
-              <div className="flex items-center justify-between pt-4 border-t border-b border-zinc-200 py-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[#8F3EC9] text-white flex items-center justify-center font-bold text-sm">
-                    EA
-                  </div>
-                  <div>
-                    <h5 className="text-sm font-semibold text-zinc-900">Energy Autonomy</h5>
-                    <p className="text-xs text-zinc-500">
-                      {existingPostStatus === 'published' ? 'Published' : 'Draft'} • {readingTime} min read
-                    </p>
-                  </div>
-                </div>
-              </div>
             </header>
 
             {/* Cover Image in Reader View */}
@@ -1477,15 +1496,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {/* Render Editor Output Preview */}
             <div className="prose prose-lg max-w-none font-medium-serif text-xl leading-relaxed text-zinc-800">
               <MediumEditor initialContent={editorJson} onJsonUpdate={null} />
-            </div>
-
-            {/* Article Tags Footer */}
-            <div className="pt-8 border-t border-zinc-200 flex items-center space-x-2">
-              {tags.map((tag) => (
-                <span key={tag} className="px-3 py-1 bg-purple-50 text-[#8F3EC9] border border-purple-100 text-xs rounded-full font-medium">
-                  #{tag}
-                </span>
-              ))}
             </div>
           </article>
         )}
