@@ -7,7 +7,9 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-const statCardsConfig = (posts) => {
+import { assessmentApi } from '../services/api';
+
+const statCardsConfig = (posts, assessmentCount) => {
   const published = posts.filter((p) => p.status === 'published').length;
   const drafts = posts.filter((p) => p.status === 'draft').length;
 
@@ -18,6 +20,7 @@ const statCardsConfig = (posts) => {
       sub: 'All articles in system',
       iconBg: 'bg-purple-50 text-[#8F3EC9]',
       accentGradient: 'from-purple-500 to-violet-500',
+      link: '/blog',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -31,6 +34,7 @@ const statCardsConfig = (posts) => {
       sub: 'Live on website',
       iconBg: 'bg-emerald-50 text-emerald-600',
       accentGradient: 'from-emerald-500 to-teal-500',
+      link: '/blog',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -44,10 +48,25 @@ const statCardsConfig = (posts) => {
       sub: 'In preparation',
       iconBg: 'bg-amber-50 text-amber-600',
       accentGradient: 'from-amber-500 to-orange-500',
+      link: '/blog',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'ASSESSMENTS',
+      value: assessmentCount ?? 0,
+      sub: 'User quiz submissions',
+      iconBg: 'bg-indigo-50 text-indigo-600',
+      accentGradient: 'from-indigo-500 to-purple-600',
+      link: '/assessments',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
         </svg>
       ),
     },
@@ -82,21 +101,33 @@ const ArticleThumbnail = ({ src, title }) => {
 
 const DashboardPage = () => {
   const { posts, loading, fetchPosts } = useBlog();
-  const cards = statCardsConfig(posts);
+  const [assessmentCount, setAssessmentCount] = useState(0);
 
   // Auto-fetch fresh statistics from API on mount and window focus
   useEffect(() => {
     if (fetchPosts) {
       fetchPosts();
     }
+    const loadAssessments = () => {
+      assessmentApi.getAll({ limit: 1 }).then((res) => {
+        if (res && res.success && res.stats) {
+          setAssessmentCount(res.stats.total ?? res.total ?? 0);
+        }
+      }).catch(() => {});
+    };
+    loadAssessments();
+
     const handleFocus = () => {
       if (fetchPosts) {
         fetchPosts();
       }
+      loadAssessments();
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [fetchPosts]);
+
+  const cards = statCardsConfig(posts, assessmentCount);
 
   // Derive recent activity dynamically with rich post attributes
   const recentActivity = useMemo(() => {
@@ -120,13 +151,22 @@ const DashboardPage = () => {
 
         <div className="flex items-center gap-2.5">
           <Link
+            to="/assessments"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-purple-200 bg-purple-50 text-[#8F3EC9] text-xs font-bold rounded-xl hover:bg-purple-100/70 transition-all shadow-2xs"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Assessments
+          </Link>
+          <Link
             to="/blog"
             className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 bg-white text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-all shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
-            View All
+            View All Blogs
           </Link>
           <Link
             to="/blog/create"
@@ -141,35 +181,49 @@ const DashboardPage = () => {
       </div>
 
       {/* ── Stat Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger-children">
-        {cards.map((card, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-2xl border border-slate-200/80 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 p-5 flex flex-col justify-between group relative overflow-hidden animate-fade-in-up"
-          >
-            {/* Accent gradient bar at top */}
-            <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${card.accentGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-            
-            <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-slate-50/80 to-transparent rounded-bl-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
-            
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{card.label}</span>
-              <span className={`w-10 h-10 rounded-xl ${card.iconBg} flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform duration-300`}>
-                {card.icon}
-              </span>
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
+        {cards.map((card, i) => {
+          const Content = (
+            <div
+              className="bg-white rounded-2xl border border-slate-200/80 hover:shadow-lg hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 p-5 flex flex-col justify-between group relative overflow-hidden animate-fade-in-up h-full"
+            >
+              {/* Accent gradient bar at top */}
+              <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${card.accentGradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+              
+              <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-br from-slate-50/80 to-transparent rounded-bl-full -z-10 opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{card.label}</span>
+                <span className={`w-10 h-10 rounded-xl ${card.iconBg} flex items-center justify-center shrink-0 shadow-sm group-hover:scale-110 transition-transform duration-300`}>
+                  {card.icon}
+                </span>
+              </div>
 
-            <div className="flex items-baseline gap-2 mt-1">
-              <p className="text-3xl font-black text-slate-900 tracking-tight">
-                {loading ? <span className="inline-block w-8 h-8 bg-slate-100 rounded-md animate-pulse" /> : card.value}
-              </p>
-            </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-3xl font-black text-slate-900 tracking-tight">
+                  {loading && card.label !== 'ASSESSMENTS' ? (
+                    <span className="inline-block w-8 h-8 bg-slate-100 rounded-md animate-pulse" />
+                  ) : (
+                    card.value
+                  )}
+                </p>
+              </div>
 
-            <div className="mt-3 pt-3 border-t border-slate-100/80">
-              <p className="text-[11px] text-slate-500 font-semibold">{card.sub}</p>
+              <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                <span>{card.sub}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+
+          return card.link ? (
+            <Link key={i} to={card.link} className="block cursor-pointer">
+              {Content}
+            </Link>
+          ) : (
+            <div key={i}>{Content}</div>
+          );
+        })}
       </div>
 
       {/* ── Recent Activity Section (Updated First, Article Center, Status Last) ── */}

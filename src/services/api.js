@@ -274,13 +274,67 @@ export const uploadApi = {
   },
 };
 
+/* ==========================================================================
+   ASSESSMENT RESULTS API
+   ========================================================================== */
+export const assessmentApi = {
+  /**
+   * List assessment results with search, filter, pagination, and stats
+   */
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.genie && params.genie !== 'all') query.append('genie', params.genie);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.order) query.append('order', params.order);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiRequest(`/api/assessment/results${qs}`, { method: 'GET' });
+  },
+
+  /**
+   * Get single assessment result by ID
+   */
+  async getById(id) {
+    return apiRequest(`/api/assessment/results/${encodeURIComponent(id)}`, { method: 'GET' });
+  },
+
+  /**
+   * Delete single assessment result by ID
+   */
+  async delete(id) {
+    return apiRequest(`/api/assessment/results/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  /**
+   * Download all assessments as CSV
+   */
+  async exportCsv() {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}/api/assessment/export`;
+    const response = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to export CSV');
+    }
+    return response.blob();
+  },
+};
+
 export default {
   auth: authApi,
   posts: postsApi,
   upload: uploadApi,
+  assessment: assessmentApi,
   getAuthToken,
   setAuthToken,
   getStoredUser,
   setStoredUser,
   clearAuth,
 };
+

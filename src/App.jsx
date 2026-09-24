@@ -10,6 +10,7 @@ import BlogListPage from './pages/BlogListPage';
 import BlogFormPage from './pages/BlogFormPage';
 import BlogViewPage from './pages/BlogViewPage';
 import BlogCreatePage from './components/BlogCreatePage';
+import AssessmentResultsPage from './pages/AssessmentResultsPage';
 import { ScrollToTop } from './components/common';
 
 const BlogCreateWrapper = () => {
@@ -38,6 +39,26 @@ const App = () => {
                 <ProtectedRoute>
                   <AdminLayout>
                     <DashboardPage />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assessments"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <AssessmentResultsPage />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assessments/:id"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <AssessmentResultsPage />
                   </AdminLayout>
                 </ProtectedRoute>
               }
