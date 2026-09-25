@@ -181,6 +181,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [restoredFromBackup, setRestoredFromBackup] = useState(false)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [pendingNavAction, setPendingNavAction] = useState(null)
+  const [isSavingLeave, setIsSavingLeave] = useState(false)
+  const [isDiscardingLeave, setIsDiscardingLeave] = useState(false)
+
 
   // Auto-resize title textarea to fit multiline content
   useEffect(() => {
@@ -312,8 +315,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           setStatus(existing.status)
           setExistingPostStatus(existing.status)
         }
-        if (existing.excerpt || existing.seo_description || existing.seoDescription) {
-          const desc = existing.seo_description || existing.seoDescription || existing.excerpt
+        if (existing.description || existing.excerpt || existing.seo_description || existing.seoDescription) {
+          const desc = existing.description || existing.excerpt || existing.seo_description || existing.seoDescription
           setSubtitle(desc)
           setShowSubtitleInput(true)
           setSeoDescription(desc)
@@ -444,10 +447,15 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     const currentLabel = overrides.labelName !== undefined
       ? overrides.labelName
       : ((labelName && labelName.trim()) ? labelName.trim() : null)
+    const currentDescription = overrides.description !== undefined
+      ? overrides.description
+      : (overrides.excerpt !== undefined ? overrides.excerpt : (subtitle ? subtitle.trim() : null))
 
     return {
       title: currentTitle,
       slug: currentSlug,
+      description: currentDescription,
+      excerpt: currentDescription,
       contentJson: overrides.contentJson !== undefined ? overrides.contentJson : editorJson,
       featuredImage: overrides.featuredImage !== undefined ? overrides.featuredImage : (coverImage || null),
       labelName: currentLabel,
@@ -722,7 +730,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
     }
 
     const cleanTitle = title.trim()
-    const finalSlug = generateSlug(cleanTitle) || 'article'
+    const finalSlug = (slug && slug.trim() && !slug.startsWith('draft-')) ? slug.trim() : (generateSlug(cleanTitle) || 'article')
     const finalLabelName = labelName.trim()
     const finalSeoTitle = (seoTitle && seoTitle.trim()) ? seoTitle.trim() : cleanTitle
     const finalSeoDescription = (seoDescription && seoDescription.trim()) ? seoDescription.trim() : subtitle.trim()
@@ -748,6 +756,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
       const postPayload = {
         title: cleanTitle,
         slug: finalSlug,
+        description: subtitle.trim(),
+        excerpt: subtitle.trim(),
         contentJson: editorJson,
         featuredImage: coverImage,
         labelName: finalLabelName,
@@ -827,6 +837,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         targetId = await ensureDraftId({
           title: title || '',
           slug: autoSlug || undefined,
+          description: subtitle ? subtitle.trim() : null,
+          excerpt: subtitle ? subtitle.trim() : null,
           contentJson: editorJson,
           featuredImage: coverImage || null,
           labelName: currentLabelName,
@@ -840,6 +852,8 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         const patchPayload = {
           title: title || '',
           slug: autoSlug || undefined,
+          description: subtitle ? subtitle.trim() : null,
+          excerpt: subtitle ? subtitle.trim() : null,
           contentJson: editorJson,
           featuredImage: coverImage || null,
           labelName: currentLabelName,
@@ -1203,20 +1217,20 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               )}
             </button>
 
-            {/* Publish Article Button - Calls PATCH /api/posts/{id} and Opens Right-Side Drawer */}
+            {/* Publish Article / Update Post Button */}
             <button
               type="button"
-              onClick={handleOpenPublishDrawer}
+              onClick={existingPostStatus === 'published' || Boolean(routeId) ? handlePublish : handleOpenPublishDrawer}
               disabled={isPublishing || isOpeningDrawer}
               className="flex items-center space-x-2 px-5 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] disabled:opacity-75 rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
             >
-              {isOpeningDrawer ? (
+              {isPublishing || isOpeningDrawer ? (
                 <>
                   <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                     <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span>Saving...</span>
+                  <span>{existingPostStatus === 'published' || Boolean(routeId) ? 'Updating Post...' : 'Saving...'}</span>
                 </>
               ) : (
                 <>
@@ -1246,9 +1260,9 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           </div>
         )}
 
-        {/* Publish / Update Toast Alert */}
+        {/* Publish / Update Toast Alert - Positioned Top Right */}
         {isPublishSuccess && (
-          <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white px-5 py-3 rounded-xl shadow-2xl border border-zinc-800 flex items-center space-x-3 animate-in slide-in-from-bottom-5">
+          <div className="fixed top-6 right-6 z-50 bg-zinc-900 text-white px-5 py-3 rounded-xl shadow-2xl border border-zinc-800 flex items-center space-x-3 animate-in slide-in-from-top-4 duration-200">
             <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             <div>
               <p className="text-xs font-semibold">{existingPostStatus === 'published' ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
@@ -1256,6 +1270,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             </div>
           </div>
         )}
+
 
         {/* ------------------------------------------------------------- */}
         {/* CANVAS MAIN BODY                                              */}
@@ -1878,20 +1893,24 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         </div>
       )}
       {/* ------------------------------------------------------------- */}
-      {/* TIER 3: UNSAVED EDITS NAVIGATION GUARD MODAL                  */}
+      {/* TIER 3: UNSAVED EDITS NAVIGATION GUARD MODAL (TOP RIGHT)      */}
       {/* ------------------------------------------------------------- */}
       {showLeaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px] transition-opacity"
+            onClick={() => !isSavingLeave && !isDiscardingLeave && setShowLeaveModal(false)}
+          />
+          <div className="fixed top-5 right-5 z-50 max-w-md w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl p-5 sm:p-6 border border-slate-200/90 space-y-4 animate-in slide-in-from-top-4 fade-in duration-200">
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/80">
                 <AlertCircle className="w-5 h-5" />
               </div>
               <div className="space-y-1 min-w-0">
-                <h3 className="text-base font-bold text-slate-900 leading-tight">
+                <h3 className="text-base font-semibold text-slate-900 leading-tight">
                   Save Draft Before Leaving?
                 </h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
+                <p className="text-xs font-normal text-slate-600 leading-relaxed">
                   You have an unfinished line or edits that haven't been saved to the server yet. Would you like to save this draft before leaving?
                 </p>
               </div>
@@ -1900,67 +1919,105 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-2">
               <button
                 type="button"
+                disabled={isSavingLeave || isDiscardingLeave}
                 onClick={() => {
                   setShowLeaveModal(false)
                   setPendingNavAction(null)
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer order-3 sm:order-1"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50 order-3 sm:order-1"
               >
                 Keep Editing
               </button>
               <button
                 type="button"
+                disabled={isSavingLeave || isDiscardingLeave}
                 onClick={async () => {
-                  const targetDeleteId = postId || createdDraftIdRef.current
-                  if (targetDeleteId) {
-                    try {
-                      await postsApi.delete(targetDeleteId)
-                    } catch (err) {
-                      console.error('Failed to delete discarded draft post:', err)
-                    }
-                  }
-                  if (blogContext?.fetchPosts) {
-                    await blogContext.fetchPosts().catch(() => {})
-                  }
+                  setIsDiscardingLeave(true)
                   try {
-                    localStorage.removeItem('energy_blog_crash_backup')
-                  } catch {}
-                  setShowLeaveModal(false)
-                  if (pendingNavAction) {
-                    const action = pendingNavAction
-                    setPendingNavAction(null)
-                    action()
+                    const targetDeleteId = postId || createdDraftIdRef.current
+                    if (targetDeleteId) {
+                      try {
+                        await postsApi.delete(targetDeleteId)
+                      } catch (err) {
+                        console.error('Failed to delete discarded draft post:', err)
+                      }
+                    }
+                    if (blogContext?.fetchPosts) {
+                      await blogContext.fetchPosts().catch(() => {})
+                    }
+                    try {
+                      localStorage.removeItem('energy_blog_crash_backup')
+                    } catch {}
+                    setShowLeaveModal(false)
+                    if (pendingNavAction) {
+                      const action = pendingNavAction
+                      setPendingNavAction(null)
+                      action()
+                    }
+                  } catch (err) {
+                    console.error('Error discarding draft:', err)
+                  } finally {
+                    setIsDiscardingLeave(false)
                   }
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer order-2"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 order-2"
               >
-                Discard & Leave
+                {isDiscardingLeave ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin text-rose-600" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span>Discarding...</span>
+                  </>
+                ) : (
+                  <span>Discard & Leave</span>
+                )}
               </button>
               <button
                 type="button"
+                disabled={isSavingLeave || isDiscardingLeave}
                 onClick={async () => {
-                  await saveToDatabase()
-                  if (blogContext?.fetchPosts) {
-                    await blogContext.fetchPosts().catch(() => {})
-                  }
+                  setIsSavingLeave(true)
                   try {
-                    localStorage.removeItem('energy_blog_crash_backup')
-                  } catch {}
-                  setShowLeaveModal(false)
-                  if (pendingNavAction) {
-                    const action = pendingNavAction
-                    setPendingNavAction(null)
-                    action()
+                    await saveToDatabase()
+                    if (blogContext?.fetchPosts) {
+                      await blogContext.fetchPosts().catch(() => {})
+                    }
+                    try {
+                      localStorage.removeItem('energy_blog_crash_backup')
+                    } catch {}
+                    setShowLeaveModal(false)
+                    if (pendingNavAction) {
+                      const action = pendingNavAction
+                      setPendingNavAction(null)
+                      action()
+                    }
+                  } catch (err) {
+                    console.error('Error saving draft before leave:', err)
+                  } finally {
+                    setIsSavingLeave(false)
                   }
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] rounded-xl shadow-xs transition-colors cursor-pointer order-1 sm:order-3"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 order-1 sm:order-3"
               >
-                Save Draft & Leave
+                {isSavingLeave ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span>Saving draft...</span>
+                  </>
+                ) : (
+                  <span>Save Draft & Leave</span>
+                )}
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
+
     </div>
   )
 }
