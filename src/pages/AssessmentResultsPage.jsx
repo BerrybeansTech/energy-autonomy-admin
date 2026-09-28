@@ -237,9 +237,9 @@ export default function AssessmentResultsPage() {
 
     return (
       <div className="w-full space-y-6 animate-fade-in text-slate-900 pb-12">
-        {/* Floating Toast Notification */}
+        {/* Floating Toast Notification (Top Right) */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-scale-in border border-slate-700">
+          <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>{toastMessage}</span>
             <button
@@ -527,9 +527,9 @@ export default function AssessmentResultsPage() {
   // ══════════════════════════════════════════════════════════════════════
   return (
     <div className="w-full space-y-7 animate-fade-in text-slate-900">
-      {/* ── Global Floating Toast Notification ── */}
+      {/* ── Global Floating Toast Notification (Top Right) ── */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-scale-in border border-slate-700">
+        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>{toastMessage}</span>
           <button

@@ -24,8 +24,14 @@ import {
   Check,
   X,
   Upload,
-  Globe
+  Globe,
+  Sparkles,
+  LayoutGrid
 } from 'lucide-react'
+import PointsBanner from './PointsBannerExtension'
+import StatementCards, { COLOR_THEMES as CARD_THEMES } from './StatementCardsExtension'
+
+
 
 // Curated brand color presets for Text Color
 const COLOR_PRESETS = [
@@ -64,6 +70,37 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
   const [showImageModal, setShowImageModal] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [showPointsModal, setShowPointsModal] = useState(false)
+  const [pointsCount, setPointsCount] = useState(4)
+  const [pointsList, setPointsList] = useState([
+    'You can pause.',
+    'You can choose.',
+    'You can restore.',
+    'You can respond differently.',
+  ])
+
+  // Statement Cards Modal state
+  const [showStatementCardsModal, setShowStatementCardsModal] = useState(false)
+  const [statementCardCount, setStatementCardCount] = useState(2)
+  const [statementCardsList, setStatementCardsList] = useState([
+    {
+      tag: 'TOLERANCE SAYS',
+      text: '"I can bear this."',
+      theme: 'beige',
+    },
+    {
+      tag: 'RESILIENCE SAYS',
+      text: '"I can respond to this without losing myself."',
+      theme: 'lavender',
+    },
+    {
+      tag: 'AUTONOMY SAYS',
+      text: '"I can create the energy I need."',
+      theme: 'mint',
+    },
+  ])
+
+
 
   // Editor selection update ticker to keep toolbar active states in sync
   const [, setSelectionTick] = useState(0)
@@ -156,7 +193,11 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
           class: 'text-[#8F3EC9] underline font-medium cursor-pointer',
         },
       }),
+      PointsBanner,
+      StatementCards,
     ],
+
+
     editorProps: {
       transformPastedHTML(html) {
         return html.replace(/style="[^"]*"/gi, (styleAttr) => {
@@ -371,6 +412,56 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
       }
     }
   }
+
+  const handleInsertPointsBanner = () => {
+    if (onEditorInteraction) {
+      onEditorInteraction()
+    }
+    const currentList = pointsList.slice(0, pointsCount).map((p) => p.trim())
+    const validPoints = currentList.filter(Boolean)
+    const pointsToInsert = validPoints.length >= 2 ? validPoints : pointsList.slice(0, pointsCount)
+
+    executeCommand((chain) => {
+      chain.insertContent({
+        type: 'pointsBanner',
+        attrs: {
+          points: pointsToInsert,
+          count: pointsToInsert.length,
+        },
+      }).run()
+    })
+    setShowPointsModal(false)
+  }
+
+  const handlePointInputChange = (index, value) => {
+    const updated = [...pointsList]
+    updated[index] = value
+    setPointsList(updated)
+  }
+
+  const handleInsertStatementCards = () => {
+    if (onEditorInteraction) {
+      onEditorInteraction()
+    }
+    const cardsToInsert = statementCardsList.slice(0, statementCardCount)
+    executeCommand((chain) => {
+      chain.insertContent({
+        type: 'statementCards',
+        attrs: {
+          cards: cardsToInsert,
+          count: cardsToInsert.length,
+        },
+      }).run()
+    })
+    setShowStatementCardsModal(false)
+  }
+
+  const handleStatementCardFieldChange = (index, field, value) => {
+    const updated = [...statementCardsList]
+    updated[index] = { ...updated[index], [field]: value }
+    setStatementCardsList(updated)
+  }
+
 
   return (
     <div ref={containerRef} className="relative w-full tiptap-editor">
@@ -598,6 +689,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                       Text Color
                     </div>
+
                     <div className="grid grid-cols-5 gap-2 mb-3">
                       {COLOR_PRESETS.map((preset) => (
                         <button
@@ -773,6 +865,50 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 <Minus className="w-[21px] h-[21px]" />
               </button>
 
+              {/* Key Points Banner Widget */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowPointsModal(true)
+                  setShowStatementCardsModal(false)
+                  setShowStyleDropdown(false)
+                  setShowColorPicker(false)
+                  setShowHighlightPicker(false)
+                }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  showPointsModal || editor.isActive('pointsBanner')
+                    ? 'bg-purple-100 text-[#8F3EC9] ring-2 ring-[#8F3EC9]/30'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-purple-50 hover:text-[#8F3EC9]'
+                }`}
+                title="Insert Key Points Banner Widget (2 to 4 points)"
+              >
+                <Sparkles className="w-[20px] h-[20px]" />
+              </button>
+
+              {/* Statement / Comparison Cards Widget */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowStatementCardsModal(true)
+                  setShowPointsModal(false)
+                  setShowStyleDropdown(false)
+                  setShowColorPicker(false)
+                  setShowHighlightPicker(false)
+                }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  showStatementCardsModal || editor.isActive('statementCards')
+                    ? 'bg-purple-100 text-[#8F3EC9] ring-2 ring-[#8F3EC9]/30'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-purple-50 hover:text-[#8F3EC9]'
+                }`}
+                title="Insert Statement / Comparison Cards (1 to 3 Cards)"
+              >
+                <LayoutGrid className="w-[19px] h-[19px]" />
+              </button>
+
+
+
               <div className="w-[1px] h-6 bg-slate-200 mx-1.5 shrink-0" />
 
               {/* 5. Lists */}
@@ -822,10 +958,297 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* MODALS: LINK, IMAGE, VIDEO                                    */}
+      {/* MODALS: LINK, IMAGE, KEY POINTS BANNER                        */}
       {/* ------------------------------------------------------------- */}
 
-      {/* LINK MODAL */}
+      {/* KEY POINTS BANNER WIDGET MODAL */}
+      {showPointsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg border border-slate-200/80 space-y-5 animate-in fade-in zoom-in-95 duration-150 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#EDE8F5] text-[#8F3EC9] flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 tracking-tight">
+                    Key Points Banner
+                  </h4>
+                  <p className="text-[12px] text-slate-500 font-normal">
+                    Select 2 to 4 points to display horizontally on a soft background
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPointsModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 1. Point Count Selector (2 to 4) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">
+                Number of Points:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[2, 3, 4].map((count) => {
+                  const isSelected = pointsCount === count
+                  return (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setPointsCount(count)}
+                      className={`py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                        isSelected
+                          ? 'bg-[#8F3EC9] text-white border-[#8F3EC9] shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <span>{count} Points</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 2. Text Input Fields for Each Point */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Point Messages:
+                </label>
+                <span className="text-[11px] text-slate-400">
+                  {pointsCount} points
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                {Array.from({ length: pointsCount }).map((_, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="w-5 text-center text-xs font-medium text-slate-400 shrink-0">
+                      {idx + 1}.
+                    </span>
+                    <input
+                      type="text"
+                      value={pointsList[idx] || ''}
+                      onChange={(e) => handlePointInputChange(idx, e.target.value)}
+                      placeholder={`e.g. Point ${idx + 1}...`}
+                      className="flex-1 border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] rounded-lg px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Live Visual Preview - borderless with soft rounded radius */}
+            <div>
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                Preview
+              </div>
+              <div
+                className="w-full rounded-xl sm:rounded-2xl p-3.5 sm:p-4 text-center"
+                style={{ backgroundColor: '#EDE8F5' }}
+              >
+                <div className="flex flex-nowrap items-center justify-evenly gap-2 text-center w-full">
+                  {pointsList.slice(0, pointsCount).map((pt, idx) => (
+                    <span
+                      key={idx}
+                      className="flex-1 min-w-0 text-[#2D2535] text-xs sm:text-[14px] leading-relaxed px-1 truncate"
+                      style={{
+                        fontFamily: "'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                        fontWeight: 500,
+                        fontStyle: 'normal',
+                      }}
+                    >
+                      {pt || `Point ${idx + 1}`}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowPointsModal(false)}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertPointsBanner}
+                className="px-4 py-1.5 text-xs font-semibold bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Insert Banner</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* STATEMENT / COMPARISON CARDS MODAL */}
+      {showStatementCardsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-2xl border border-slate-200/80 space-y-5 animate-in fade-in zoom-in-95 duration-150 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 text-[#8F3EC9] flex items-center justify-center">
+                  <LayoutGrid className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 tracking-tight">
+                    Statement / Comparison Cards
+                  </h4>
+                  <p className="text-[12px] text-slate-500 font-normal">
+                    Add 1 to 3 side-by-side cards with custom labels, quotes, and themes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStatementCardsModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 1. Card Count Selector (1 to 3) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">
+                Number of Cards:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((count) => {
+                  const isSelected = statementCardCount === count
+                  return (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => setStatementCardCount(count)}
+                      className={`py-2 px-3 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
+                        isSelected
+                          ? 'bg-[#8F3EC9] text-white border-[#8F3EC9] shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <span>{count} {count === 1 ? 'Card' : 'Cards'}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 2. Card Content & Color Selection */}
+            <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+              {Array.from({ length: statementCardCount }).map((_, idx) => {
+                const card = statementCardsList[idx] || {
+                  tag: `STATEMENT ${idx + 1}`,
+                  text: '"Your statement here."',
+                  theme: 'beige',
+                }
+                const activeTheme = CARD_THEMES[card.theme] || CARD_THEMES.beige
+
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700">
+                        Card {idx + 1}
+                      </span>
+                      {/* Color theme swatches */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-400 font-medium mr-1">
+                          Theme:
+                        </span>
+                        {Object.values(CARD_THEMES).map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleStatementCardFieldChange(idx, 'theme', t.id)}
+                            className={`w-5 h-5 rounded-md transition-all cursor-pointer border ${
+                              card.theme === t.id
+                                ? 'ring-2 ring-[#8F3EC9] ring-offset-1 scale-110'
+                                : 'hover:scale-105 opacity-80 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: t.bg, border: t.border }}
+                            title={t.name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="sm:col-span-1">
+                        <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                          Tag / Label:
+                        </label>
+                        <input
+                          type="text"
+                          value={card.tag || ''}
+                          onChange={(e) =>
+                            handleStatementCardFieldChange(idx, 'tag', e.target.value)
+                          }
+                          placeholder="e.g. TOLERANCE SAYS"
+                          className="w-full border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                          Quote / Text:
+                        </label>
+                        <input
+                          type="text"
+                          value={card.text || ''}
+                          onChange={(e) =>
+                            handleStatementCardFieldChange(idx, 'text', e.target.value)
+                          }
+                          placeholder='e.g. "I can bear this."'
+                          className="w-full border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowStatementCardsModal(false)}
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertStatementCards}
+                className="px-4 py-1.5 text-xs font-semibold bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Insert Cards</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLinkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
@@ -981,3 +1404,4 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
 }
 
 export default MediumEditor
+

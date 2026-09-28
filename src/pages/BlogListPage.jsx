@@ -117,14 +117,14 @@ const BlogListPage = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto py-2 px-1 sm:px-3 space-y-6 animate-fade-in text-slate-900">
-      {/* ── Global Floating Toast Notification ── */}
+      {/* ── Global Floating Toast Notification (Top Right) ── */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-scale-in border border-slate-700">
+        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>{toastMessage}</span>
           <button
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2 text-sm"
+            className="text-slate-400 hover:text-white ml-2 text-sm cursor-pointer"
           >
             ✕
           </button>

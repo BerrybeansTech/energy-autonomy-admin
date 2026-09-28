@@ -41,11 +41,13 @@ export function normalizePost(raw) {
 
   // Plain text excerpt fallback
   const plainText = contentJson ? extractTextFromTiptap(contentJson).trim() : '';
-  const excerpt =
+  const description =
+    raw.description ||
+    raw.excerpt ||
     raw.seo_description ||
     raw.seoDescription ||
-    raw.excerpt ||
     (plainText ? plainText.slice(0, 160) + (plainText.length > 160 ? '…' : '') : '');
+  const excerpt = description;
 
   // Format date
   const rawDate = raw.published_at || raw.publishedAt || raw.created_at || raw.createdAt;
@@ -58,6 +60,7 @@ export function normalizePost(raw) {
     id: raw.id,
     title: raw.title || '',
     slug: raw.slug || '',
+    description: description,
     category: raw.label_name || raw.category_name || raw.categoryName || raw.category || '',
     categoryName: raw.label_name || raw.category_name || raw.categoryName || raw.category || '',
     label_name: raw.label_name || raw.category_name || raw.categoryName || raw.category || null,
@@ -151,12 +154,16 @@ export const BlogProvider = ({ children }) => {
       const payload = {
         title: postData.title || '',
         slug: postData.slug || undefined,
+        description: postData.description !== undefined ? postData.description : (postData.excerpt || null),
+        excerpt: postData.excerpt !== undefined ? postData.excerpt : (postData.description || null),
         contentJson: postData.contentJson || postData.content_json || postData.content,
         featuredImage: postData.featuredImage || postData.image || null,
         labelName: postData.labelName || postData.label || postData.categoryName || postData.category || null,
         status: postData.status || 'draft',
+        readTime: postData.readTime || postData.readingTime,
+        readingTime: postData.readingTime || postData.readTime,
         seoTitle: postData.seoTitle || postData.title || null,
-        seoDescription: postData.seoDescription || postData.excerpt || null,
+        seoDescription: postData.seoDescription || postData.description || postData.excerpt || null,
       };
 
       const createdRes = await postsApi.create(payload);
@@ -184,12 +191,16 @@ export const BlogProvider = ({ children }) => {
       const payload = {
         title: updates.title,
         slug: updates.slug,
+        description: updates.description !== undefined ? updates.description : (updates.excerpt !== undefined ? updates.excerpt : updates.seoDescription),
+        excerpt: updates.excerpt !== undefined ? updates.excerpt : (updates.description !== undefined ? updates.description : updates.seoDescription),
         contentJson: updates.contentJson || updates.content_json || updates.content,
         featuredImage: updates.featuredImage !== undefined ? updates.featuredImage : updates.image,
         labelName: updates.labelName !== undefined ? updates.labelName : (updates.label !== undefined ? updates.label : (updates.categoryName !== undefined ? updates.categoryName : updates.category)),
         status: updates.status,
+        readTime: updates.readTime || updates.readingTime,
+        readingTime: updates.readingTime || updates.readTime,
         seoTitle: updates.seoTitle !== undefined ? updates.seoTitle : updates.title,
-        seoDescription: updates.seoDescription !== undefined ? updates.seoDescription : updates.excerpt,
+        seoDescription: updates.seoDescription !== undefined ? updates.seoDescription : updates.description,
       };
 
       const updatedRaw = await postsApi.update(id, payload);
