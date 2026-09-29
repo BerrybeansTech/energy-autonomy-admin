@@ -11,6 +11,8 @@ import BlogFormPage from './pages/BlogFormPage';
 import BlogViewPage from './pages/BlogViewPage';
 import BlogCreatePage from './components/BlogCreatePage';
 import AssessmentResultsPage from './pages/AssessmentResultsPage';
+import SeoManagementPage from './pages/SeoManagementPage';
+import ScriptsManagementPage from './pages/ScriptsManagementPage';
 import { ScrollToTop } from './components/common';
 
 const BlogCreateWrapper = () => {
@@ -72,6 +74,20 @@ const App = () => {
                   </AdminLayout>
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/seo"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout>
+                    <SeoManagementPage />
+                  </AdminLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/scripts"
+              element={<Navigate to="/seo?tab=scripts" replace />}
             />
             <Route
               path="/blog/create"

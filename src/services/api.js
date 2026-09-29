@@ -3,7 +3,11 @@
  * Connects directly to Energy-Autonomy-Backend REST API endpoints
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://energy-autonomy-backend.onrender.com';
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:5000' : 'http://localhost:5000')
+).replace(/\/$/, '');
 
 export const getAuthToken = () => {
   try {
@@ -326,15 +330,126 @@ export const assessmentApi = {
   },
 };
 
+/* ==========================================================================
+   PAGE SEO & METADATA API
+   ========================================================================== */
+export const seoApi = {
+  /**
+   * Get all page SEO records for admin table
+   */
+  async getAll() {
+    return apiRequest('/api/seo/admin/list', { method: 'GET' });
+  },
+
+  /**
+   * Create custom page SEO
+   */
+  async create(data) {
+    return apiRequest('/api/seo/admin/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update page SEO by ID or key
+   */
+  async update(id, data) {
+    return apiRequest(`/api/seo/admin/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Delete page SEO by ID or key
+   */
+  async delete(id) {
+    return apiRequest(`/api/seo/admin/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+/* ==========================================================================
+   TRACKING & HEAD/BODY SCRIPTS API
+   ========================================================================== */
+export const scriptsApi = {
+  /**
+   * Get global tracking scripts (head, body_top, body_bottom)
+   */
+  async getGlobal() {
+    return apiRequest('/api/scripts/admin/global', { method: 'GET' });
+  },
+
+  /**
+   * Save global tracking scripts (head, body_top, body_bottom)
+   */
+  async saveGlobal(data) {
+    return apiRequest('/api/scripts/admin/global', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Get all tracking scripts
+   */
+  async getAll() {
+    return apiRequest('/api/scripts/admin', { method: 'GET' });
+  },
+
+  /**
+   * Create new tracking script
+   */
+  async create(data) {
+    return apiRequest('/api/scripts/admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Update tracking script
+   */
+  async update(id, data) {
+    return apiRequest(`/api/scripts/admin/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Toggle script active status
+   */
+  async toggle(id) {
+    return apiRequest(`/api/scripts/admin/${encodeURIComponent(id)}/toggle`, {
+      method: 'PATCH',
+    });
+  },
+
+  /**
+   * Delete tracking script
+   */
+  async delete(id) {
+    return apiRequest(`/api/scripts/admin/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 export default {
   auth: authApi,
   posts: postsApi,
   upload: uploadApi,
   assessment: assessmentApi,
+  seo: seoApi,
+  scripts: scriptsApi,
   getAuthToken,
   setAuthToken,
   getStoredUser,
   setStoredUser,
   clearAuth,
 };
+
 
