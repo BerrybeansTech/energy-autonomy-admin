@@ -44,6 +44,16 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    label: 'SEO & Tracking',
+    path: '/seo',
+    icon: (
+      <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+      </svg>
+    ),
+  },
 ];
 
 const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
@@ -127,7 +137,11 @@ const Sidebar = ({ isSidebarExpanded, setIsSidebarExpanded }) => {
                 ? location.pathname === '/blog' ||
                   location.pathname.startsWith('/blog/view') ||
                   location.pathname.startsWith('/blog/edit')
-                : location.pathname === '/blog/create' || location.pathname === '/write-blog' || location.pathname === '/create-blog';
+                : item.path === '/blog/create'
+                ? location.pathname === '/blog/create' || location.pathname === '/write-blog' || location.pathname === '/create-blog'
+                : item.path === '/seo'
+                ? location.pathname.startsWith('/seo') || location.pathname.startsWith('/scripts')
+                : false;
             return (
               <div key={item.path} className="relative group flex justify-center">
                 <NavLink
