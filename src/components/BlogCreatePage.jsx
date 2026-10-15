@@ -182,7 +182,6 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const [pendingNavAction, setPendingNavAction] = useState(null)
   const [isSavingLeave, setIsSavingLeave] = useState(false)
-  const [isDiscardingLeave, setIsDiscardingLeave] = useState(false)
 
 
   // Auto-resize title textarea to fit multiline content
@@ -1260,13 +1259,13 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
           </div>
         )}
 
-        {/* Publish / Update Toast Alert - Positioned Top Right */}
+        {/* Publish / Update Toast Alert - Positioned Top Right - Light Style */}
         {isPublishSuccess && (
-          <div className="fixed top-6 right-6 z-50 bg-zinc-900 text-white px-5 py-3 rounded-xl shadow-2xl border border-zinc-800 flex items-center space-x-3 animate-in slide-in-from-top-4 duration-200">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <div className="fixed top-6 right-6 z-50 bg-white/95 backdrop-blur-md text-slate-800 px-5 py-3 rounded-xl shadow-xl shadow-slate-900/10 border border-slate-200/90 ring-1 ring-slate-900/5 flex items-center space-x-3 animate-in slide-in-from-top-4 duration-200">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
             <div>
-              <p className="text-xs font-semibold">{existingPostStatus === 'published' ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
-              <p className="text-[11px] text-zinc-400">{existingPostStatus === 'published' ? 'Changes saved to database' : 'Article created and published via API'}</p>
+              <p className="text-xs font-semibold text-slate-900">{existingPostStatus === 'published' ? 'Blog Article Updated!' : 'Blog Article Published!'}</p>
+              <p className="text-[11px] text-slate-500">{existingPostStatus === 'published' ? 'Changes saved to database' : 'Article created and published via API'}</p>
             </div>
           </div>
         )}
@@ -1893,90 +1892,68 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
         </div>
       )}
       {/* ------------------------------------------------------------- */}
-      {/* TIER 3: UNSAVED EDITS NAVIGATION GUARD MODAL (TOP RIGHT)      */}
+      {/* TIER 3: UNSAVED EDITS NAVIGATION GUARD MODAL (CENTERED)       */}
       {/* ------------------------------------------------------------- */}
       {showLeaveModal && (
-        <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px] transition-opacity"
-            onClick={() => !isSavingLeave && !isDiscardingLeave && setShowLeaveModal(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-backdrop-fade"
+            onClick={() => !isSavingLeave && setShowLeaveModal(false)}
           />
-          <div className="fixed top-5 right-5 z-50 max-w-md w-[calc(100vw-2.5rem)] bg-white rounded-2xl shadow-2xl p-5 sm:p-6 border border-slate-200/90 space-y-4 animate-in slide-in-from-top-4 fade-in duration-200">
-            <div className="flex items-start gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/80">
-                <AlertCircle className="w-5 h-5" />
+          <div
+            className="relative z-10 max-w-md w-full bg-white rounded-2xl shadow-2xl p-5 sm:p-6 border border-slate-200/90 space-y-4 animate-scale-in text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/80">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <h3 className="text-base font-semibold text-slate-900 leading-tight">
+                    Save Changes Before Leaving?
+                  </h3>
+                  <p className="text-xs font-normal text-slate-600 leading-relaxed">
+                    You have unsaved changes. Would you like to save your work before leaving?
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1 min-w-0">
-                <h3 className="text-base font-semibold text-slate-900 leading-tight">
-                  Save Draft Before Leaving?
-                </h3>
-                <p className="text-xs font-normal text-slate-600 leading-relaxed">
-                  You have an unfinished line or edits that haven't been saved to the server yet. Would you like to save this draft before leaving?
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-end gap-2">
               <button
                 type="button"
-                disabled={isSavingLeave || isDiscardingLeave}
+                disabled={isSavingLeave}
                 onClick={() => {
                   setShowLeaveModal(false)
                   setPendingNavAction(null)
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50 order-3 sm:order-1"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+                title="Dismiss"
               >
-                Keep Editing
+                <X className="w-4 h-4" />
               </button>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5">
               <button
                 type="button"
-                disabled={isSavingLeave || isDiscardingLeave}
-                onClick={async () => {
-                  setIsDiscardingLeave(true)
+                disabled={isSavingLeave}
+                onClick={() => {
                   try {
-                    const targetDeleteId = postId || createdDraftIdRef.current
-                    if (targetDeleteId) {
-                      try {
-                        await postsApi.delete(targetDeleteId)
-                      } catch (err) {
-                        console.error('Failed to delete discarded draft post:', err)
-                      }
-                    }
-                    if (blogContext?.fetchPosts) {
-                      await blogContext.fetchPosts().catch(() => {})
-                    }
-                    try {
-                      localStorage.removeItem('energy_blog_crash_backup')
-                    } catch {}
-                    setShowLeaveModal(false)
-                    if (pendingNavAction) {
-                      const action = pendingNavAction
-                      setPendingNavAction(null)
-                      action()
-                    }
-                  } catch (err) {
-                    console.error('Error discarding draft:', err)
-                  } finally {
-                    setIsDiscardingLeave(false)
+                    localStorage.removeItem('energy_blog_crash_backup')
+                  } catch {}
+                  setShowLeaveModal(false)
+                  if (pendingNavAction) {
+                    const action = pendingNavAction
+                    setPendingNavAction(null)
+                    action()
                   }
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 order-2"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
-                {isDiscardingLeave ? (
-                  <>
-                    <svg className="w-3.5 h-3.5 animate-spin text-rose-600" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    <span>Discarding...</span>
-                  </>
-                ) : (
-                  <span>Discard & Leave</span>
-                )}
+                Don't Save
               </button>
               <button
                 type="button"
-                disabled={isSavingLeave || isDiscardingLeave}
+                disabled={isSavingLeave}
                 onClick={async () => {
                   setIsSavingLeave(true)
                   try {
@@ -1999,7 +1976,7 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                     setIsSavingLeave(false)
                   }
                 }}
-                className="w-full sm:w-auto px-4 py-2 text-xs font-normal text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 order-1 sm:order-3"
+                className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-white bg-[#8F3EC9] hover:bg-[#7B2EB3] rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {isSavingLeave ? (
                   <>
@@ -2007,15 +1984,15 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                    <span>Saving draft...</span>
+                    <span>Saving...</span>
                   </>
                 ) : (
-                  <span>Save Draft & Leave</span>
+                  <span>Save & Leave</span>
                 )}
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
     </div>

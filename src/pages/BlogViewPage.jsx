@@ -106,6 +106,113 @@ function renderTiptapNode(node, index) {
           <code>{node.content?.map((child, i) => renderTiptapNode(child, i))}</code>
         </pre>
       );
+    case 'pointsBanner':
+    case 'points_banner': {
+      let rawPoints = node.attrs?.points;
+      if (typeof rawPoints === 'string') {
+        try {
+          rawPoints = JSON.parse(rawPoints);
+        } catch {
+          rawPoints = [];
+        }
+      }
+      const points = Array.isArray(rawPoints) ? rawPoints.filter(Boolean) : [];
+      if (points.length === 0) return null;
+      return (
+        <div
+          key={index}
+          className="my-7 w-full rounded-xl sm:rounded-2xl px-6 sm:px-10 py-7"
+          style={{ backgroundColor: '#EDE8F5' }}
+        >
+          <div
+            className="grid items-center text-center w-full gap-3 sm:gap-6"
+            style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
+          >
+            {points.map((pt, pIdx) => (
+              <span key={pIdx} className="text-[#2D2535] text-center font-medium text-[16px]">
+                {pt}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case 'statementCards':
+    case 'statement_cards': {
+      let rawCards = node.attrs?.cards;
+      if (typeof rawCards === 'string') {
+        try {
+          rawCards = JSON.parse(rawCards);
+        } catch {
+          rawCards = [];
+        }
+      }
+      const cards = Array.isArray(rawCards) ? rawCards : [];
+      if (cards.length === 0) return null;
+      const THEMES = {
+        beige: { bg: '#F6F1EA', border: '1px solid rgba(138, 123, 110, 0.15)', tagColor: '#8A7B6E', textColor: '#241D17' },
+        lavender: { bg: '#F4EEFB', border: '1px solid #D7C3F3', tagColor: '#8F3EC9', textColor: '#2D2535' },
+        mint: { bg: '#EFF8F2', border: '1px solid #C4E9D0', tagColor: '#059669', textColor: '#1A3326' },
+      };
+      return (
+        <div key={index} className="flex flex-wrap items-stretch justify-start gap-4 sm:gap-6 my-6 w-full">
+          {cards.map((c, cIdx) => {
+            const theme = THEMES[c.theme] || THEMES.beige;
+            return (
+              <div
+                key={cIdx}
+                className="rounded-2xl p-6 flex flex-col justify-start w-full max-w-[325px] shadow-xs"
+                style={{ backgroundColor: theme.bg, border: theme.border, color: theme.textColor }}
+              >
+                {c.tag && <span className="text-[11px] font-bold tracking-wider mb-2" style={{ color: theme.tagColor }}>{c.tag}</span>}
+                {c.text && <p className="font-serif italic text-base m-0 leading-relaxed" style={{ color: theme.textColor }}>{c.text}</p>}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    case 'keypointStatement':
+    case 'keypoint_statement':
+    case 'keypointStatementWidget': {
+      let rawItems = node.attrs?.items;
+      if (typeof rawItems === 'string') {
+        try {
+          rawItems = JSON.parse(rawItems);
+        } catch {
+          rawItems = [];
+        }
+      }
+      const items = Array.isArray(rawItems) ? rawItems : [];
+      if (items.length === 0) return null;
+      return (
+        <div key={index} className="my-6 space-y-2.5 w-full">
+          {items.map((row, rIdx) => (
+            <div
+              key={rIdx}
+              className="flex flex-col sm:flex-row items-stretch rounded-lg sm:rounded-xl overflow-hidden shadow-2xs border border-slate-100/60"
+            >
+              <div
+                className="w-full sm:w-[45%] flex items-center px-5 sm:px-6 py-3.5 sm:py-4"
+                style={{ backgroundColor: '#F6F1EA' }}
+              >
+                <span className="text-[#241D17] font-serif font-bold text-[15px] sm:text-[16px] leading-snug">
+                  {row.keypoint}
+                </span>
+              </div>
+              <div
+                className="w-full sm:w-[55%] flex items-center px-5 sm:px-6 py-3.5 sm:py-4"
+                style={{ backgroundColor: '#F0EEF9' }}
+              >
+                <span className="text-[#6B5B7B] font-serif font-normal text-[15px] sm:text-[16px] leading-snug">
+                  {row.statement}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
     case 'horizontalRule':
       return <hr key={index} className="my-6 border-slate-200" />;
     case 'text': {
