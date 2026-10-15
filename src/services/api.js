@@ -245,6 +245,18 @@ export const postsApi = {
       method: 'DELETE',
     });
   },
+
+  /**
+   * Reorder blog posts (PUT /api/posts/reorder)
+   * Supports { orders: [{ id, sort_order }] } or { postIds: [id1, id2, ...] }
+   */
+  async reorder(payload) {
+    const body = Array.isArray(payload) ? { orders: payload } : payload;
+    return apiRequest('/api/posts/reorder', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
 };
 
 /* ==========================================================================

@@ -6,7 +6,7 @@ import { ConfirmationModal } from '../components/common';
 import { uploadApi } from '../services/api';
 
 const BlogListPage = () => {
-  const { posts, deletePost, loading, fetchPosts } = useBlog();
+  const { posts, deletePost, loading, fetchPosts, reorderPosts } = useBlog();
   const navigate = useNavigate();
 
   // Active Tab: 'published' as first, 'draft' as second
@@ -15,6 +15,15 @@ const BlogListPage = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Arrangement / Sort Mode State
+  const [isArranging, setIsArranging] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [localOrderedPosts, setLocalOrderedPosts] = useState([]);
+  const [hasOrderChanged, setHasOrderChanged] = useState(false);
+  const initialOrderRef = useRef([]);
 
   const menuRef = useRef(null);
 
@@ -52,22 +61,35 @@ const BlogListPage = () => {
     [posts]
   );
 
-  // Filter posts by active tab and search query
+  // Posts for the currently selected tab
+  const tabPosts = useMemo(() => {
+    return posts.filter((p) => p.status === activeTab);
+  }, [posts, activeTab]);
+
+  // Sync local ordered list with tab posts when not actively in arrange mode
+  useEffect(() => {
+    if (!isArranging) {
+      setLocalOrderedPosts(tabPosts);
+      setHasOrderChanged(false);
+    }
+  }, [tabPosts, isArranging]);
+
+  // Filter posts by search query (disabled during arrange mode to prevent order conflicts)
   const displayedPosts = useMemo(() => {
-    return posts
-      .filter((p) => p.status === activeTab)
-      .filter((p) => {
-        if (!search.trim()) return true;
-        const q = search.toLowerCase();
-        return (
-          p.title?.toLowerCase().includes(q) ||
-          p.excerpt?.toLowerCase().includes(q) ||
-          (Array.isArray(p.tags) ? p.tags.join(' ') : p.tags || '')
-            .toLowerCase()
-            .includes(q)
-        );
-      });
-  }, [posts, activeTab, search]);
+    if (isArranging || !search.trim()) {
+      return localOrderedPosts;
+    }
+    const q = search.toLowerCase();
+    return localOrderedPosts.filter((p) => {
+      return (
+        p.title?.toLowerCase().includes(q) ||
+        p.excerpt?.toLowerCase().includes(q) ||
+        (Array.isArray(p.tags) ? p.tags.join(' ') : p.tags || '')
+          .toLowerCase()
+          .includes(q)
+      );
+    });
+  }, [localOrderedPosts, search, isArranging]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -115,38 +137,237 @@ const BlogListPage = () => {
     return `Updated ${post.publishedAt}`;
   };
 
+  // Toggle Arrange mode on/off
+  const handleToggleArrange = () => {
+    if (!isArranging) {
+      setSearch('');
+      const currentTabItems = [...tabPosts];
+      initialOrderRef.current = currentTabItems.map((p) => p.id);
+      setLocalOrderedPosts(currentTabItems);
+      setHasOrderChanged(false);
+      setIsArranging(true);
+    } else {
+      handleSaveAndExitArrange();
+    }
+  };
+
+  // Save the reordered list to backend API and exit arrange mode
+  const handleSaveAndExitArrange = async () => {
+    if (hasOrderChanged) {
+      try {
+        setSavingOrder(true);
+        await reorderPosts(localOrderedPosts);
+        setIsArranging(false);
+        setHasOrderChanged(false);
+        showToast('Blog order arranged successfully');
+      } catch (err) {
+        showToast('Failed to save order: ' + (err.message || 'Error'));
+      } finally {
+        setSavingOrder(false);
+      }
+    } else {
+      setIsArranging(false);
+    }
+  };
+
+  // Cancel arrange mode and revert local order without saving
+  const handleCancelArrange = () => {
+    setLocalOrderedPosts(tabPosts);
+    setHasOrderChanged(false);
+    setIsArranging(false);
+  };
+
+  // Drag and Drop handlers (purely reorders local state, no API/toast until Done is clicked)
+  const handleDragStart = (e, index) => {
+    if (!isArranging) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e, index) => {
+    if (!isArranging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnter = (e, index) => {
+    if (!isArranging) return;
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    if (!isArranging) return;
+    e.preventDefault();
+
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const updated = [...localOrderedPosts];
+    const [movedItem] = updated.splice(draggedIndex, 1);
+    updated.splice(targetIndex, 0, movedItem);
+
+    setLocalOrderedPosts(updated);
+    setHasOrderChanged(true);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Move item up or down by 1 position (arrow buttons, local state only)
+  const handleMoveItem = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= localOrderedPosts.length) return;
+
+    const updated = [...localOrderedPosts];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+
+    setLocalOrderedPosts(updated);
+    setHasOrderChanged(true);
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto py-2 px-1 sm:px-3 space-y-6 animate-fade-in text-slate-900">
-      {/* ── Global Floating Toast Notification (Top Right) ── */}
+      {/* ── Global Floating Toast / Snackbar (Top Right) - Clean Light Style ── */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-6 right-6 z-50 bg-white/95 backdrop-blur-md text-slate-800 px-4 py-2.5 rounded-xl shadow-xl shadow-slate-900/10 flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-200/90 ring-1 ring-slate-900/5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-400 shrink-0" />
+          <span className="text-slate-800">{toastMessage}</span>
           <button
+            type="button"
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2 text-sm cursor-pointer"
+            className="text-slate-400 hover:text-slate-700 ml-2 text-sm cursor-pointer p-0.5 rounded hover:bg-slate-100 transition-colors"
+            title="Close"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* ── Page Header: Title + Write Button ── */}
+      {/* ── Page Header: Title + Arrange Button + Write Button ── */}
       <div className="flex items-center justify-between pt-2 pb-1">
         <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
           Blogs
         </h1>
 
-        <Link
-          to="/blog/create"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] text-white text-xs font-bold rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Write New Blog</span>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          {/* Arrange Order Button */}
+          <button
+            type="button"
+            onClick={isArranging ? handleSaveAndExitArrange : handleToggleArrange}
+            disabled={savingOrder}
+            className={`inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer shadow-2xs ${
+              isArranging
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/30'
+                : 'bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 hover:text-slate-900 hover:border-slate-300'
+            }`}
+            title={isArranging ? 'Save and finish arranging' : 'Arrange the display order of blogs'}
+          >
+            {isArranging ? (
+              savingOrder ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Done Arranging</span>
+                </>
+              )
+            ) : (
+              <>
+                {/* 6-dot grid icon */}
+                <svg className="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="8" cy="6" r="1.8" />
+                  <circle cx="16" cy="6" r="1.8" />
+                  <circle cx="8" cy="12" r="1.8" />
+                  <circle cx="16" cy="12" r="1.8" />
+                  <circle cx="8" cy="18" r="1.8" />
+                  <circle cx="16" cy="18" r="1.8" />
+                </svg>
+                <span>Arrange</span>
+              </>
+            )}
+          </button>
+
+          {/* Write New Blog Link */}
+          <Link
+            to="/blog/create"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#8F3EC9] hover:bg-[#7B2EB3] active:bg-[#68249B] text-white text-xs font-bold rounded-lg shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Write New Blog</span>
+          </Link>
+        </div>
       </div>
+
+      {/* ── Arrange Mode Informational Banner ── */}
+      {isArranging && (
+        <div className="bg-gradient-to-r from-purple-50/70 via-white to-orange-50/40 border border-purple-200/80 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in duration-200 shadow-xs">
+          <div className="flex items-center gap-2.5 text-slate-700">
+            <span className="p-1.5 rounded-lg bg-[#8F3EC9]/10 text-[#8F3EC9] font-bold shrink-0">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="8" cy="6" r="1.8" />
+                <circle cx="16" cy="6" r="1.8" />
+                <circle cx="8" cy="12" r="1.8" />
+                <circle cx="16" cy="12" r="1.8" />
+                <circle cx="8" cy="18" r="1.8" />
+                <circle cx="16" cy="18" r="1.8" />
+              </svg>
+            </span>
+            <span>
+              <strong>Arrange Mode:</strong> Drag & drop blogs using grid handles (⠿) or use arrows to adjust order. Click <strong>Done Arranging</strong> when finished.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCancelArrange}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-medium rounded-lg shadow-2xs transition-colors cursor-pointer text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAndExitArrange}
+              disabled={savingOrder}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold rounded-lg shadow-xs hover:shadow transition-all cursor-pointer text-xs disabled:opacity-50"
+            >
+              {savingOrder ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Done Arranging</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Tabs Navigation: Published (First), Drafts (Second) + Aligned Search ── */}
       <div className="flex items-center justify-between border-b border-slate-200/80 pb-0 gap-4">
@@ -155,6 +376,7 @@ const BlogListPage = () => {
           <button
             type="button"
             onClick={() => {
+              if (isArranging) handleSaveAndExitArrange();
               setActiveTab('published');
               setOpenMenuId(null);
               if (fetchPosts) fetchPosts();
@@ -173,6 +395,7 @@ const BlogListPage = () => {
           <button
             type="button"
             onClick={() => {
+              if (isArranging) handleSaveAndExitArrange();
               setActiveTab('draft');
               setOpenMenuId(null);
               if (fetchPosts) fetchPosts();
@@ -188,32 +411,39 @@ const BlogListPage = () => {
           </button>
         </div>
 
-        {/* Search Input (Properly centered & aligned with toolbar) */}
-        <div className="relative pb-2 flex items-center">
-          <svg
-            className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 pointer-events-none"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search stories..."
-            className="w-40 sm:w-56 pl-8 pr-7 py-1.5 text-xs bg-white hover:bg-slate-50/80 focus:bg-white border border-slate-200/70 rounded-lg focus:outline-none focus:border-[#8F3EC9]/60 transition-all font-normal placeholder:text-slate-400"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 hover:text-slate-600 text-xs w-4 h-4 flex items-center justify-center cursor-pointer"
+        {/* Search Input (Hidden in arrange mode to prevent order conflicts) */}
+        {!isArranging ? (
+          <div className="relative pb-2 flex items-center">
+            <svg
+              className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              ✕
-            </button>
-          )}
-        </div>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search stories..."
+              className="w-40 sm:w-56 pl-8 pr-7 py-1.5 text-xs bg-white hover:bg-slate-50/80 focus:bg-white border border-slate-200/70 rounded-lg focus:outline-none focus:border-[#8F3EC9]/60 transition-all font-normal placeholder:text-slate-400"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-[calc(50%+4px)] text-slate-400 hover:text-slate-600 text-xs w-4 h-4 flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="pb-2 text-xs text-slate-400 font-medium italic">
+            Arranging {displayedPosts.length} {activeTab} blogs
+          </div>
+        )}
       </div>
 
       {/* ── Stories List ── */}
@@ -248,25 +478,71 @@ const BlogListPage = () => {
             </Link>
           </div>
         ) : (
-          displayedPosts.map((post) => {
+          displayedPosts.map((post, index) => {
             const isMenuOpen = openMenuId === post.id;
+            const isBeingDragged = draggedIndex === index;
+            const isDraggedOver = dragOverIndex === index && draggedIndex !== index;
+
             return (
               <div
                 key={post.id}
-                className="py-4 px-2 sm:px-3 flex items-center justify-between gap-4 group transition-colors relative hover:bg-white/80 rounded-xl"
+                draggable={isArranging}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnter={(e) => handleDragEnter(e, index)}
+                onDragEnd={handleDragEnd}
+                onDrop={(e) => handleDrop(e, index)}
+                className={`py-4 px-2 sm:px-3 flex items-center justify-between gap-3 sm:gap-4 group transition-all relative rounded-xl ${
+                  isArranging
+                    ? 'cursor-grab active:cursor-grabbing hover:bg-purple-50/40 select-none'
+                    : 'hover:bg-white/80'
+                } ${
+                  isBeingDragged
+                    ? 'opacity-40 border-2 border-dashed border-[#8F3EC9] bg-purple-50/50 scale-[0.99]'
+                    : ''
+                } ${
+                  isDraggedOver
+                    ? 'ring-2 ring-[#8F3EC9] ring-offset-2 bg-purple-50/30'
+                    : ''
+                }`}
               >
-                {/* Left: Thumbnail + Title + Description + Meta */}
-                <div className="flex items-start gap-4 min-w-0 flex-1">
+                {/* Left: [Grid Handle + Position (in arrange mode)] + Thumbnail + Title + Excerpt + Meta */}
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  {/* Dot-dot Grid Handle & Ranking Badge (Visible in Arrange Mode) */}
+                  {isArranging && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div
+                        className="p-1.5 rounded-md text-slate-400 group-hover:text-[#8F3EC9] group-hover:bg-[#8F3EC9]/10 transition-colors flex items-center justify-center cursor-grab active:cursor-grabbing"
+                        title="Click and drag to reorder"
+                      >
+                        {/* 6-dot vertical grid handle */}
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="8" cy="6" r="1.8" />
+                          <circle cx="16" cy="6" r="1.8" />
+                          <circle cx="8" cy="12" r="1.8" />
+                          <circle cx="16" cy="12" r="1.8" />
+                          <circle cx="8" cy="18" r="1.8" />
+                          <circle cx="16" cy="18" r="1.8" />
+                        </svg>
+                      </div>
+                      <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded">
+                        #{index + 1}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Image Thumbnail */}
                   <div
-                    onClick={() => navigate(`/blog/view/${post.id}`)}
+                    onClick={() => {
+                      if (!isArranging) navigate(`/blog/view/${post.id}`);
+                    }}
                     className="shrink-0 w-16 h-14 sm:w-20 sm:h-16 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer group-hover:opacity-90 transition-opacity flex items-center justify-center"
                   >
                     {getBlogImage(post.image || post.featuredImage) ? (
                       <img
                         src={getBlogImage(post.image || post.featuredImage)}
                         alt={post.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover pointer-events-none"
                         onError={(e) => {
                           e.target.style.display = 'none';
                         }}
@@ -283,7 +559,9 @@ const BlogListPage = () => {
                   {/* Text Content */}
                   <div className="min-w-0 flex-1">
                     <h2
-                      onClick={() => navigate(`/blog/view/${post.id}`)}
+                      onClick={() => {
+                        if (!isArranging) navigate(`/blog/view/${post.id}`);
+                      }}
                       className="text-[15px] sm:text-base font-bold font-lora text-slate-900 hover:text-[#8F3EC9] cursor-pointer line-clamp-1 leading-snug transition-colors"
                       title={post.title}
                     >
@@ -305,69 +583,106 @@ const BlogListPage = () => {
                   </div>
                 </div>
 
-                {/* Right: Three Dots Action Menu */}
-                <div className="relative shrink-0" ref={isMenuOpen ? menuRef : null}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenuId(isMenuOpen ? null : post.id);
-                    }}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                    title="Story options"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="5" cy="12" r="2" />
-                      <circle cx="12" cy="12" r="2" />
-                      <circle cx="19" cy="12" r="2" />
-                    </svg>
-                  </button>
-
-                  {/* Dropdown Popup Menu */}
-                  {isMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-scale-in origin-top-right">
-                      {/* 1. Copy link */}
+                {/* Right: Arrange Micro-Buttons + Three Dots Action Menu */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Up / Down Move Arrow Buttons (Accessible / Quick ordering) */}
+                  {isArranging && (
+                    <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200/70">
                       <button
                         type="button"
-                        onClick={() => handleCopyLink(post)}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
-                      >
-                        <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                        </svg>
-                        <span>Copy link</span>
-                      </button>
-
-                      {/* 2. Edit story */}
-                      <button
-                        type="button"
-                        onClick={() => handleEditStory(post)}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
-                      >
-                        <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        <span>Edit story</span>
-                      </button>
-
-                      <div className="border-t border-slate-100 my-1" />
-
-                      {/* 3. Delete blog (labeled Delete blog as requested) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          setDeleteConfirm(post);
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveItem(index, -1);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-rose-600 hover:bg-rose-50/80 transition-colors text-left cursor-pointer"
+                        disabled={index === 0}
+                        className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        title="Move up"
                       >
-                        <svg className="w-4 h-4 text-rose-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
                         </svg>
-                        <span>Delete blog</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveItem(index, 1);
+                        }}
+                        disabled={index === displayedPosts.length - 1}
+                        className="p-1 rounded text-slate-500 hover:text-slate-900 hover:bg-white disabled:opacity-25 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        title="Move down"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                        </svg>
                       </button>
                     </div>
                   )}
+
+                  {/* Three Dots Menu Button */}
+                  <div className="relative" ref={isMenuOpen ? menuRef : null}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(isMenuOpen ? null : post.id);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                      title="Story options"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <circle cx="5" cy="12" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="19" cy="12" r="2" />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown Popup Menu */}
+                    {isMenuOpen && (
+                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200/90 py-1.5 z-50 animate-scale-in origin-top-right">
+                        {/* 1. Copy link */}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyLink(post)}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
+                        >
+                          <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          <span>Copy link</span>
+                        </button>
+
+                        {/* 2. Edit story */}
+                        <button
+                          type="button"
+                          onClick={() => handleEditStory(post)}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
+                        >
+                          <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span>Edit story</span>
+                        </button>
+
+                        <div className="border-t border-slate-100 my-1" />
+
+                        {/* 3. Delete blog */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            setDeleteConfirm(post);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-normal text-rose-600 hover:bg-rose-50/80 transition-colors text-left cursor-pointer"
+                        >
+                          <svg className="w-4 h-4 text-rose-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span>Delete blog</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );

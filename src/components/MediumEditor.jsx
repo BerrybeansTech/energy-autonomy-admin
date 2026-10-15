@@ -26,10 +26,13 @@ import {
   Upload,
   Globe,
   Sparkles,
-  LayoutGrid
+  LayoutGrid,
+  Columns,
+  Plus
 } from 'lucide-react'
 import PointsBanner from './PointsBannerExtension'
 import StatementCards, { COLOR_THEMES as CARD_THEMES } from './StatementCardsExtension'
+import KeypointStatement, { DEFAULT_KEYPOINT_ITEMS } from './KeypointStatementExtension'
 
 
 
@@ -99,6 +102,10 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
       theme: 'mint',
     },
   ])
+
+  // Keypoint & Statement Contrast Widget state
+  const [showKeypointModal, setShowKeypointModal] = useState(false)
+  const [keypointList, setKeypointList] = useState(DEFAULT_KEYPOINT_ITEMS)
 
 
 
@@ -195,6 +202,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
       }),
       PointsBanner,
       StatementCards,
+      KeypointStatement,
     ],
 
 
@@ -460,6 +468,46 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
     const updated = [...statementCardsList]
     updated[index] = { ...updated[index], [field]: value }
     setStatementCardsList(updated)
+  }
+
+  const handleInsertKeypointStatement = () => {
+    if (onEditorInteraction) {
+      onEditorInteraction()
+    }
+    const itemsToInsert = keypointList.filter((item) => item.keypoint?.trim() || item.statement?.trim())
+    const finalItems = itemsToInsert.length > 0 ? itemsToInsert : DEFAULT_KEYPOINT_ITEMS
+    executeCommand((chain) => {
+      chain.insertContent({
+        type: 'keypointStatement',
+        attrs: {
+          items: finalItems,
+          count: finalItems.length,
+        },
+      }).run()
+    })
+    setShowKeypointModal(false)
+  }
+
+  const handleKeypointFieldChange = (index, field, value) => {
+    const updated = [...keypointList]
+    updated[index] = { ...updated[index], [field]: value }
+    setKeypointList(updated)
+  }
+
+  const handleAddKeypointRowModal = () => {
+    if (keypointList.length >= 8) return
+    setKeypointList([
+      ...keypointList,
+      {
+        keypoint: `Keypoint ${keypointList.length + 1}`,
+        statement: `Statement ${keypointList.length + 1}`,
+      },
+    ])
+  }
+
+  const handleRemoveKeypointRowModal = (index) => {
+    if (keypointList.length <= 1) return
+    setKeypointList(keypointList.filter((_, i) => i !== index))
   }
 
 
@@ -892,6 +940,7 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   setShowStatementCardsModal(true)
+                  setShowKeypointModal(false)
                   setShowPointsModal(false)
                   setShowStyleDropdown(false)
                   setShowColorPicker(false)
@@ -905,6 +954,28 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
                 title="Insert Statement / Comparison Cards (1 to 3 Cards)"
               >
                 <LayoutGrid className="w-[19px] h-[19px]" />
+              </button>
+
+              {/* Keypoint & Statement Contrast Widget */}
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowKeypointModal(true)
+                  setShowStatementCardsModal(false)
+                  setShowPointsModal(false)
+                  setShowStyleDropdown(false)
+                  setShowColorPicker(false)
+                  setShowHighlightPicker(false)
+                }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  showKeypointModal || editor.isActive('keypointStatement')
+                    ? 'bg-purple-100 text-[#8F3EC9] ring-2 ring-[#8F3EC9]/30'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-purple-50 hover:text-[#8F3EC9]'
+                }`}
+                title="Insert Keypoint & Statement Contrast Widget (Side-by-side rows)"
+              >
+                <Columns className="w-[19px] h-[19px]" />
               </button>
 
 
@@ -1243,6 +1314,167 @@ const MediumEditor = ({ onJsonUpdate, onLineWrap, onEditorInteraction, initialCo
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
                 <span>Insert Cards</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KEYPOINT & STATEMENT CONTRAST WIDGET MODAL (HORIZONTAL 2-COLUMN LAYOUT) */}
+      {showKeypointModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 sm:p-6 md:p-8 py-8 sm:py-10 overflow-y-auto">
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl lg:max-w-5xl border border-slate-200/90 flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150 my-auto overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header (Fixed at top) */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 text-[#8F3EC9] flex items-center justify-center shrink-0">
+                  <Columns className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 tracking-tight">
+                    Keypoint & Statement Contrast Widget
+                  </h4>
+                  <p className="text-[12px] text-slate-500 font-normal">
+                    Insert side-by-side comparison rows
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeypointModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body: Horizontal 2-Column Split */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 overflow-hidden">
+              {/* LEFT COLUMN: Input Form */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-3.5 flex flex-col">
+                <div className="flex items-center justify-between pb-1 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-700 tracking-wider uppercase">
+                    Contrast Rows ({keypointList.length})
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Max 8 rows
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 flex-1 overflow-y-auto pr-1">
+                  {keypointList.map((row, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl border border-slate-200/90 bg-slate-50/60 space-y-2 transition-all hover:border-slate-300"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-purple-100 text-[#8F3EC9] text-[10px] flex items-center justify-center font-bold">
+                            {idx + 1}
+                          </span>
+                          <span>Row {idx + 1}</span>
+                        </span>
+                        {keypointList.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveKeypointRowModal(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Remove row"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Clean side-by-side inputs without any label headers */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={row.keypoint || ''}
+                          onChange={(e) => handleKeypointFieldChange(idx, 'keypoint', e.target.value)}
+                          placeholder="Keypoint..."
+                          className="w-full border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] rounded-lg px-2.5 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all font-medium bg-white"
+                        />
+                        <input
+                          type="text"
+                          value={row.statement || ''}
+                          onChange={(e) => handleKeypointFieldChange(idx, 'statement', e.target.value)}
+                          placeholder="Statement..."
+                          className="w-full border border-slate-200 focus:border-[#8F3EC9] focus:ring-1 focus:ring-[#8F3EC9] rounded-lg px-2.5 py-2 text-xs text-slate-800 placeholder-slate-400 outline-none transition-all bg-white"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Row Button */}
+                {keypointList.length < 8 && (
+                  <button
+                    type="button"
+                    onClick={handleAddKeypointRowModal}
+                    className="w-full py-2.5 border border-dashed border-purple-200 hover:border-purple-300 hover:bg-purple-50/50 text-[#8F3EC9] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Contrast Row ({keypointList.length}/8)</span>
+                  </button>
+                )}
+              </div>
+
+              {/* RIGHT COLUMN: Live Visual Preview */}
+              <div className="p-5 sm:p-6 bg-slate-50/60 overflow-y-auto flex flex-col justify-start">
+                <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200/60 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Live Preview
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Cream & Lavender Contrast
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 my-auto py-2">
+                  {keypointList.map((r, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col sm:flex-row items-stretch rounded-lg sm:rounded-xl overflow-hidden shadow-2xs border border-slate-200/70 transition-all"
+                    >
+                      <div
+                        className="w-full sm:w-[45%] flex items-center px-4 py-3 font-serif font-bold text-xs sm:text-[13.5px] text-[#241D17] leading-snug break-words"
+                        style={{ backgroundColor: '#F6F1EA' }}
+                      >
+                        {r.keypoint || 'Keypoint'}
+                      </div>
+                      <div
+                        className="w-full sm:w-[55%] flex items-center px-4 py-3 font-serif font-normal text-xs sm:text-[13.5px] text-[#6B5B7B] leading-snug break-words"
+                        style={{ backgroundColor: '#F0EEF9' }}
+                      >
+                        {r.statement || 'Statement'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer (Fixed at bottom) */}
+            <div className="flex items-center justify-end gap-2.5 px-6 py-3.5 border-t border-slate-100 bg-white shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowKeypointModal(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertKeypointStatement}
+                className="px-5 py-2 text-xs font-semibold bg-[#8F3EC9] hover:bg-[#7B2EB3] text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Columns className="w-3.5 h-3.5" />
+                <span>Insert Widget</span>
               </button>
             </div>
           </div>
