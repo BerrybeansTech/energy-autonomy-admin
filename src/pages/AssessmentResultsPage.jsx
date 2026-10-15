@@ -237,15 +237,15 @@ export default function AssessmentResultsPage() {
 
     return (
       <div className="w-full space-y-6 animate-fade-in text-slate-900 pb-12">
-        {/* Floating Toast Notification (Top Right) */}
+        {/* Floating Toast Notification (Top Right) - Clean Light Style */}
         {toastMessage && (
-          <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{toastMessage}</span>
+          <div className="fixed top-6 right-6 z-50 bg-white/95 backdrop-blur-md text-slate-800 px-4 py-2.5 rounded-xl shadow-xl shadow-slate-900/10 flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-200/90 ring-1 ring-slate-900/5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-400 shrink-0" />
+            <span className="text-slate-800">{toastMessage}</span>
             <button
               type="button"
               onClick={() => setToastMessage(null)}
-              className="text-slate-400 hover:text-white ml-2 cursor-pointer flex items-center justify-center"
+              className="text-slate-400 hover:text-slate-700 ml-2 cursor-pointer p-0.5 rounded hover:bg-slate-100 transition-colors flex items-center justify-center"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -527,15 +527,15 @@ export default function AssessmentResultsPage() {
   // ══════════════════════════════════════════════════════════════════════
   return (
     <div className="w-full space-y-7 animate-fade-in text-slate-900">
-      {/* ── Global Floating Toast Notification (Top Right) ── */}
+      {/* ── Global Floating Toast Notification (Top Right) - Clean Light Style ── */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-6 right-6 z-50 bg-white/95 backdrop-blur-md text-slate-800 px-4 py-2.5 rounded-xl shadow-xl shadow-slate-900/10 flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-top-4 duration-200 border border-slate-200/90 ring-1 ring-slate-900/5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shadow-emerald-400 shrink-0" />
+          <span className="text-slate-800">{toastMessage}</span>
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2 cursor-pointer flex items-center justify-center"
+            className="text-slate-400 hover:text-slate-700 ml-2 cursor-pointer p-0.5 rounded hover:bg-slate-100 transition-colors flex items-center justify-center"
           >
             <X className="w-3.5 h-3.5" />
           </button>

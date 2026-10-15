@@ -54,6 +54,7 @@ export function normalizePost(raw) {
   const publishedAt = rawDate ? new Date(rawDate).toISOString().split('T')[0] : '';
 
   const readMinutes = raw.reading_time || raw.readingTime || Math.max(1, Math.ceil(plainText.split(/\s+/).filter(Boolean).length / 200));
+  const sortOrder = raw.sort_order !== undefined && raw.sort_order !== null ? Number(raw.sort_order) : (raw.sortOrder !== undefined && raw.sortOrder !== null ? Number(raw.sortOrder) : 0);
 
   return {
     ...raw,
@@ -65,6 +66,8 @@ export function normalizePost(raw) {
     categoryName: raw.label_name || raw.category_name || raw.categoryName || raw.category || '',
     label_name: raw.label_name || raw.category_name || raw.categoryName || raw.category || null,
     status: raw.status || 'draft',
+    sort_order: sortOrder,
+    sortOrder: sortOrder,
     image: raw.featured_image || raw.featuredImage || raw.image || '',
     featuredImage: raw.featured_image || raw.featuredImage || raw.image || '',
     contentJson: contentJson,
@@ -288,6 +291,39 @@ export const BlogProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Reorder posts optimistically and persist to backend via API (PUT /api/posts/reorder)
+   * @param {Array<string|object>} orderedItems Array of post IDs or post objects in desired order
+   */
+  const reorderPosts = async (orderedItems) => {
+    if (!orderedItems || !Array.isArray(orderedItems)) return;
+    const postIds = orderedItems.map((item) => (typeof item === 'object' ? item.id : item));
+
+    // Optimistically update in-memory order of posts
+    setPosts((prevPosts) => {
+      const postsMap = new Map(prevPosts.map((p) => [String(p.id), p]));
+      const reordered = [];
+      postIds.forEach((id, index) => {
+        const found = postsMap.get(String(id));
+        if (found) {
+          reordered.push({ ...found, sort_order: index + 1, sortOrder: index + 1 });
+          postsMap.delete(String(id));
+        }
+      });
+      const remaining = Array.from(postsMap.values());
+      return [...reordered, ...remaining];
+    });
+
+    try {
+      const res = await postsApi.reorder({ postIds });
+      return res;
+    } catch (err) {
+      console.error('Failed to save reordered posts:', err);
+      await fetchPosts();
+      throw err;
+    }
+  };
+
   return (
     <BlogContext.Provider
       value={{
@@ -303,6 +339,7 @@ export const BlogProvider = ({ children }) => {
         publishPost,
         updateStatus,
         deletePost,
+        reorderPosts,
       }}
     >
       {children}
