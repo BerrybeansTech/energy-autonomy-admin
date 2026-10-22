@@ -961,7 +961,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               }`}
             >
               <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
-                <LayoutDashboard className="w-5 h-5" />
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
               </span>
               {isSidebarExpanded && (
                 <span className="whitespace-nowrap overflow-hidden text-[13.5px]">
@@ -1024,7 +1027,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               }`}
             >
               <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
-                <FileText className="w-5 h-5" />
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
               </span>
               {isSidebarExpanded && (
                 <span className="whitespace-nowrap overflow-hidden text-[13.5px]">
@@ -1054,7 +1060,10 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
               }`}
             >
               <span className="shrink-0 text-[#8F3EC9]">
-                <PenSquare className="w-5 h-5" />
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
               </span>
               {isSidebarExpanded && (
                 <span className="whitespace-nowrap overflow-hidden text-[13.5px]">
@@ -1065,6 +1074,39 @@ const BlogCreatePage = ({ onBackToDashboard }) => {
             {!isSidebarExpanded && (
               <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900 text-white text-[11px] font-medium rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
                 Write New Blog
+              </div>
+            )}
+          </div>
+
+          {/* SEO & Tracking Item */}
+          <div className="relative group flex justify-center">
+            <Link
+              to="/seo"
+              onClick={(e) => {
+                e.preventDefault()
+                handleProtectedNavigation(() => navigate('/seo'))
+              }}
+              className={`transition-all duration-200 ${
+                isSidebarExpanded
+                  ? 'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] font-normal text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                  : 'w-10 h-10 flex items-center justify-center rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 p-0'
+              }`}
+            >
+              <span className="shrink-0 text-slate-400 group-hover:text-slate-700 transition-colors">
+                <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+              </span>
+              {isSidebarExpanded && (
+                <span className="whitespace-nowrap overflow-hidden text-[13.5px]">
+                  SEO & Tracking
+                </span>
+              )}
+            </Link>
+            {!isSidebarExpanded && (
+              <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900 text-white text-[11px] font-medium rounded-md shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                SEO & Tracking
               </div>
             )}
           </div>
