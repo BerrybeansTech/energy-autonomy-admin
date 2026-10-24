@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://energy-autonomy-backend.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.lifecraftsuccesshub.in';
 
 export const BLOG_IMAGES = {};
 
