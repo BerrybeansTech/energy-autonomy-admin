@@ -7,6 +7,7 @@ import {
   Eye,
   Trash2,
   Mail,
+  Phone,
   Calendar,
   ClipboardCheck,
   TrendingUp,
@@ -322,6 +323,18 @@ export default function AssessmentResultsPage() {
                   <Mail className="w-4 h-4 text-slate-400" />
                   <span>{selectedResult.email}</span>
                 </span>
+                {selectedResult.phone && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <a
+                      href={`tel:${selectedResult.phone}`}
+                      className="flex items-center gap-1.5 text-slate-700 hover:text-[#8F3EC9] transition-colors"
+                    >
+                      <Phone className="w-4 h-4 text-slate-400" />
+                      <span>{selectedResult.phone}</span>
+                    </a>
+                  </>
+                )}
                 <span className="text-slate-300">•</span>
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-slate-400" />
@@ -696,6 +709,7 @@ export default function AssessmentResultsPage() {
             <thead className="px-5 sm:px-6 py-2.5 bg-slate-50/70 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider select-none">
               <tr>
                 <th className="py-3 px-5 sm:px-6">User</th>
+                <th className="py-3 px-4">Phone Number</th>
                 <th className="py-3 px-4">Dominant Genie</th>
                 <th className="py-3 px-4 hidden md:table-cell">Date & Time</th>
                 <th className="py-3 px-4 text-center">Status</th>
@@ -716,6 +730,9 @@ export default function AssessmentResultsPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4">
+                      <div className="w-24 h-3.5 bg-slate-200 rounded" />
+                    </td>
+                    <td className="py-4 px-4">
                       <div className="w-28 h-6 bg-slate-200 rounded-lg" />
                     </td>
                     <td className="py-4 px-4 hidden md:table-cell">
@@ -731,7 +748,7 @@ export default function AssessmentResultsPage() {
                 ))
               ) : data.results.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-14 text-center">
+                  <td colSpan={6} className="py-14 text-center">
                     <div className="max-w-xs mx-auto flex flex-col items-center">
                       <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#8F3EC9] flex items-center justify-center mb-3 border border-purple-100">
                         <ClipboardCheck className="w-6 h-6 opacity-60" />
@@ -783,7 +800,24 @@ export default function AssessmentResultsPage() {
                         </div>
                       </td>
 
-                      {/* 2. Dominant Genie */}
+                      {/* 2. Phone Number */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {row.phone ? (
+                          <a
+                            href={`tel:${row.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-[#8F3EC9] transition-colors"
+                            title={`Call ${row.phone}`}
+                          >
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{row.phone}</span>
+                          </a>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">—</span>
+                        )}
+                      </td>
+
+                      {/* 3. Dominant Genie */}
                       <td className="py-3.5 px-4">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.badgeClass}`}
