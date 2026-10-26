@@ -530,8 +530,9 @@ const BlogViewPage = () => {
 
   const handleCopyLink = () => {
     if (!post) return;
-    const urlSlug = post.slug || post.id;
-    const url = `${window.location.origin}/blog/view/${urlSlug}`;
+    const urlSlug = post.slug ? String(post.slug).replace(/^\/+/, '') : post.id;
+    const frontendBase = (import.meta.env.VITE_FRONTEND_URL || 'https://www.lifecraftsuccesshub.in').replace(/\/+$/, '');
+    const url = `${frontendBase}/blog/${urlSlug}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url);
     }
